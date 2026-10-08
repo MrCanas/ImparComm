@@ -2,7 +2,7 @@
 -- Esquema propio `crm` dentro del proyecto Supabase compartido con icam web dashboard.
 -- Los empleados son auth.users; la baja se lee de public.app_user_account.is_active.
 
-CREATE SCHEMA IF NOT EXISTS crm;
+CREATE SCHEMA IF NOT EXISTS crm;  -- puede existir ya: scripts/migrate.ts crea crm.schema_migrations
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Tablas

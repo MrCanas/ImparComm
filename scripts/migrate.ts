@@ -20,24 +20,31 @@ const DIR = path.resolve(__dirname, "..", "db", "migrations");
 const dryRun = process.argv.includes("--dry");
 
 async function main() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("Falta DATABASE_URL en .env.local");
+  // La conexión directa de Supabase es solo IPv6; el pooler funciona en cualquier red.
+  const connectionString = process.env.DATABASE_POOLER_URL || process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("Falta DATABASE_POOLER_URL o DATABASE_URL en .env.local");
 
   const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
   await client.connect();
 
   try {
-    await client.query("CREATE SCHEMA IF NOT EXISTS crm");
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS crm.schema_migrations (
-        nombre     text PRIMARY KEY,
-        aplicada_en timestamptz NOT NULL DEFAULT now()
-      )`);
-    await client.query("REVOKE ALL ON crm.schema_migrations FROM anon, authenticated");
+    // En --dry no se escribe nada: si la tabla de control no existe, todo está pendiente.
+    if (!dryRun) {
+      await client.query("CREATE SCHEMA IF NOT EXISTS crm");
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS crm.schema_migrations (
+          nombre     text PRIMARY KEY,
+          aplicada_en timestamptz NOT NULL DEFAULT now()
+        )`);
+      await client.query("REVOKE ALL ON crm.schema_migrations FROM anon, authenticated");
+    }
 
-    const { rows } = await client.query<{ nombre: string }>(
-      "SELECT nombre FROM crm.schema_migrations",
+    const { rows: existe } = await client.query(
+      "SELECT 1 FROM information_schema.tables WHERE table_schema = 'crm' AND table_name = 'schema_migrations'",
     );
+    const { rows } = existe.length
+      ? await client.query<{ nombre: string }>("SELECT nombre FROM crm.schema_migrations")
+      : { rows: [] as { nombre: string }[] };
     const aplicadas = new Set(rows.map((r) => r.nombre));
     const pendientes = readdirSync(DIR)
       .filter((f) => f.endsWith(".sql"))
@@ -66,7 +73,7 @@ async function main() {
         throw err;
       }
     }
-    console.log("Migraciones aplicadas.");
+    console.log(dryRun ? "(simulación: no se ha aplicado nada)" : "Migraciones aplicadas.");
   } finally {
     await client.end();
   }
