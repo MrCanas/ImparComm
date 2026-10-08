@@ -76,7 +76,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader title="Administración" subtitle="Vista consolidada del equipo y configuración de ImparComm." />
-      <nav className="-mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0" aria-label="Secciones">
+      <nav className="-mx-3 mb-4 flex gap-2 overflow-x-auto no-scrollbar px-3 pb-1 sm:mx-0 sm:px-0" aria-label="Secciones">
         {TABS.map((t) => (
           <Link
             key={t.key}

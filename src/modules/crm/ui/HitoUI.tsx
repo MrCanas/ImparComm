@@ -173,7 +173,7 @@ export function HitoDetalle({
             ) : (
               <>
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-sm text-text-muted">{candidatos.length} candidatos de tus contactos</p>
+                  <p className="text-sm text-text-muted">{candidatos.length} candidato{candidatos.length === 1 ? "" : "s"} de tus contactos</p>
                   <button
                     type="button"
                     className={`${btn.secondary} min-h-9 px-3`}

@@ -35,7 +35,7 @@ export function AppHeader({ user, pendientes }: { user: ShellUser; pendientes: n
             alt="Impar Capital"
             width={180}
             height={32}
-            className="h-6 sm:h-7 w-auto max-w-[130px] sm:max-w-[180px] object-contain object-left"
+            className="h-6 sm:h-7 w-auto max-w-[130px] sm:max-w-[180px] object-contain object-left mix-blend-lighten"
             priority
           />
           <span className="hidden sm:inline h-5 w-px bg-white/20" aria-hidden="true" />

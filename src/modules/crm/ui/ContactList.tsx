@@ -90,7 +90,7 @@ export function ContactList({ relaciones, etiquetas }: { relaciones: Relacion[];
         </select>
       </div>
 
-      <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0" role="tablist" aria-label="Estado">
+      <div className="-mx-3 flex gap-2 overflow-x-auto no-scrollbar px-3 pb-1 sm:mx-0 sm:px-0" role="tablist" aria-label="Estado">
         {FILTROS.map((f) => (
           <button
             key={f.key}

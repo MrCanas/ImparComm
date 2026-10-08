@@ -19,9 +19,11 @@ export default async function ContactosPage() {
         title="Mis contactos"
         subtitle="Personas externas con las que te has reunido o que has añadido."
         actions={
-          <Link href="/contactos/nuevo" className={`${btn.primary} hidden lg:inline-flex`}>
-            <Icon name="plus" className="h-4 w-4" /> Añadir contacto
-          </Link>
+          <div className="hidden lg:block">
+            <Link href="/contactos/nuevo" className={btn.primary}>
+              <Icon name="plus" className="h-4 w-4" /> Añadir contacto
+            </Link>
+          </div>
         }
       />
       <ContactList relaciones={relaciones} etiquetas={etiquetas} />

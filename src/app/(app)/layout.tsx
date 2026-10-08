@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AddFab } from "@/components/layout/AddFab";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BottomNav } from "@/components/layout/BottomNav";
-import { Icon } from "@/components/ui/Icon";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { getCrm } from "@/lib/db/server";
 
@@ -39,13 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="mx-auto w-full max-w-6xl flex-1 px-3 pt-4 pb-28 sm:px-4 lg:px-6 lg:pt-6 lg:pb-10">
         {children}
       </main>
-      <Link
-        href="/contactos/nuevo"
-        aria-label="Añadir contacto"
-        className="lg:hidden fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-icam-gold text-white shadow-lg transition active:scale-95 bottom-[calc(5rem+env(safe-area-inset-bottom))]"
-      >
-        <Icon name="plus" className="h-7 w-7" strokeWidth={2.2} />
-      </Link>
+      <AddFab />
       <BottomNav pendientes={pendientes} />
       <footer className="hidden lg:block bg-icam-900 text-white/55 text-sm px-8 py-3">
         ImparComm · Impar Capital · Uso interno y confidencial.

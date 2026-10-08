@@ -16,6 +16,12 @@ npm run db:migrate                 # aplica db/migrations/*.sql en el esquema cr
 npm run dev
 ```
 
+Verificación de punta a punta de RLS y reglas de negocio contra el Supabase real (crea datos `@ejemplo.test` y los borra):
+
+```bash
+npm run db:verify -- <email_admin> <email_empleado_de_prueba>
+```
+
 En Supabase → Settings → API → **Exposed schemas**, añadir `crm` (cambio aditivo; no afecta a icam).
 
 ## Estructura

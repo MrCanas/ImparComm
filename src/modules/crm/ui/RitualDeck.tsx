@@ -50,14 +50,20 @@ export function RitualDeck({
   const [historial, setHistorial] = useState<Hecho[]>([]);
   const [puntos, setPuntos] = useState(puntosIniciales);
   const [catalogo, setCatalogo] = useState(etiquetas);
-  const [elegidas, setElegidas] = useState<Etiqueta[]>([]);
+  // Selección de etiquetas por tarjeta: al avanzar, la siguiente empieza limpia sin esperar a otro render.
+  const [seleccion, setSeleccion] = useState<Record<string, Etiqueta[]>>({});
   const [error, setError] = useState("");
   const [dx, setDx] = useState(0);
   const [saliendo, setSaliendo] = useState<"izq" | "der" | null>(null);
   const [pending, startTransition] = useTransition();
   const inicio = useRef<{ x: number; y: number; id: number } | null>(null);
+  // El desplazamiento vive también en una ref: al soltar, el estado puede ir un render por detrás.
+  const dxRef = useRef(0);
 
   const actual = cola[indice];
+  const elegidas = actual ? (seleccion[actual.id] ?? []) : [];
+  const setElegidas = (fn: (s: Etiqueta[]) => Etiqueta[]) =>
+    actual && setSeleccion((m) => ({ ...m, [actual.id]: fn(m[actual.id] ?? []) }));
   const hechas = historial.length;
 
   function avanzar(direccion: "izq" | "der", hecho: Hecho) {
@@ -65,7 +71,6 @@ export function RitualDeck({
     setTimeout(() => {
       setHistorial((h) => [...h, hecho]);
       setIndice((i) => i + 1);
-      setElegidas([]);
       setDx(0);
       setSaliendo(null);
     }, 180);
@@ -122,7 +127,6 @@ export function RitualDeck({
       setPuntos((p) => p - 1);
       setHistorial((h) => h.slice(0, -1));
       setIndice((i) => i - 1);
-      setElegidas([]);
     });
   }
 
@@ -147,15 +151,22 @@ export function RitualDeck({
     const mx = e.clientX - s.x;
     const my = e.clientY - s.y;
     if (Math.abs(mx) > 8 && Math.abs(mx) > Math.abs(my)) {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        // Algunos punteros (sintéticos, ya liberados) no admiten captura; el gesto sigue igual.
+      }
+      dxRef.current = mx;
       setDx(mx);
     }
   }
   function onPointerUp() {
     if (!inicio.current) return;
     inicio.current = null;
-    if (dx > UMBRAL_SWIPE) onClasificar();
-    else if (dx < -UMBRAL_SWIPE) onArchivar();
+    const final = dxRef.current;
+    dxRef.current = 0;
+    if (final > UMBRAL_SWIPE) onClasificar();
+    else if (final < -UMBRAL_SWIPE) onArchivar();
     else setDx(0);
   }
 
