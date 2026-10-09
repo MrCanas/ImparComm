@@ -7,9 +7,10 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint src",
-    "check": "tsc --noEmit && npm run lint",
+    "check": "tsc --noEmit && npm run lint && npm test",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:verify": "tsx scripts/verify-crm.ts"
+    "db:verify": "tsx scripts/verify-crm.ts",
+    "test": "tsx --test \"src/**/__tests__/*.test.ts\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",

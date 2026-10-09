@@ -11,11 +11,14 @@ import {
   adoptarRelacion,
   cambiarPlazo,
   convertirEnGeneral,
+  enviarmeResumenPrueba,
   fusionarEtiquetas,
   guardarConfig,
+  guardarDominiosInternos,
   guardarPermiso,
   marcarBonoEntregado,
   quitarPermiso,
+  sincronizarMiCalendario,
 } from "@/modules/crm/actions";
 import type { Etiqueta } from "@/modules/crm/types";
 
@@ -233,19 +236,24 @@ function PlazoRow({ e, run, pending }: { e: Etiqueta & { usos: number }; run: Ru
   );
 }
 
-export function ConfigAdmin({ valores }: { valores: { plazo_defecto_dias: number; puntos_por_bono: number; importe_bono: number } }) {
+export function ConfigAdmin({
+  valores,
+}: {
+  valores: { plazo_defecto_dias: number; puntos_por_bono: number; importe_bono: number; evento_umbral_externos: number };
+}) {
   const [run, pending, error] = useRun();
   const [v, setV] = useState(valores);
   const campos: { k: keyof typeof valores; t: string }[] = [
     { k: "plazo_defecto_dias", t: "Plazo por defecto (días)" },
     { k: "puntos_por_bono", t: "Puntos por bono" },
     { k: "importe_bono", t: "Importe del bono (€)" },
+    { k: "evento_umbral_externos", t: "Externos para tarjeta «Evento»" },
   ];
   return (
     <section className={`${card} p-4`}>
       <SectionTitle>Parámetros</SectionTitle>
       <ErrorMsg error={error} />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {campos.map((c) => (
           <div key={c.k}>
             <label className={label} htmlFor={`cfg-${c.k}`}>{c.t}</label>
@@ -393,5 +401,171 @@ export function BolsaList({ items }: { items: BolsaItem[] }) {
         ))}
       </ul>
     </>
+  );
+}
+
+// ─── Integraciones ───────────────────────────────────────────────────────────
+
+const PERMISOS_NECESARIOS: { rol: string; para: string }[] = [
+  { rol: "Calendars.Read", para: "Captura de reuniones" },
+  { rol: "Mail.Read", para: "Cargo y teléfono desde la firma" },
+  { rol: "Mail.Send", para: "Email semanal" },
+];
+
+export function IntegracionesAdmin({
+  flags,
+  graphRoles,
+  graphError,
+  zohoFaltan,
+  emailFrom,
+  suscripciones,
+  ultimoEnvio,
+  dominios,
+}: {
+  flags: { calendario: boolean; firmas: boolean; zoho: boolean; resumen: boolean };
+  graphRoles: string[] | null;
+  graphError: string | null;
+  zohoFaltan: string[];
+  emailFrom: boolean;
+  suscripciones: { buzon: string; expira: string }[];
+  ultimoEnvio: string | null;
+  dominios: string;
+}) {
+  const [run, pending, error] = useRun();
+  const [msg, setMsg] = useState("");
+  const [dom, setDom] = useState(dominios);
+
+  const filas: { nombre: string; variable: string; activo: boolean; listo: boolean; nota: string }[] = [
+    {
+      nombre: "Captura de reuniones",
+      variable: "CALENDARIO_ENABLED",
+      activo: flags.calendario,
+      listo: !!graphRoles?.includes("Calendars.Read"),
+      nota: graphRoles?.includes("Calendars.Read")
+        ? `${suscripciones.length} suscripciones activas`
+        : "Falta conceder Calendars.Read (permiso de aplicación) en Entra",
+    },
+    {
+      nombre: "Firmas (cargo y teléfono)",
+      variable: "FIRMAS_ENABLED",
+      activo: flags.firmas,
+      listo: !!graphRoles?.includes("Mail.Read"),
+      nota: "Solo se guardan cargo y teléfono; nunca el texto del email",
+    },
+    {
+      nombre: "Email semanal (viernes 9:00)",
+      variable: "RESUMEN_SEMANAL_ENABLED",
+      activo: flags.resumen,
+      listo: !!graphRoles?.includes("Mail.Send") && emailFrom,
+      nota: emailFrom ? (ultimoEnvio ? `Último envío: ${fmtFecha(ultimoEnvio)}` : "Aún no se ha enviado") : "Falta EMAIL_FROM",
+    },
+    {
+      nombre: "Zoho CRM (al marcar Contactado)",
+      variable: "ZOHO_SYNC_ENABLED",
+      activo: flags.zoho,
+      listo: zohoFaltan.length === 0,
+      nota: zohoFaltan.length === 0 ? "Credenciales configuradas" : `Faltan: ${zohoFaltan.join(", ")}`,
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <ErrorMsg error={error} />
+      {msg ? <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{msg}</p> : null}
+
+      <section>
+        <SectionTitle>Estado</SectionTitle>
+        <ul className={`${card} divide-y divide-subtle/60`}>
+          {filas.map((f) => (
+            <li key={f.variable} className="flex flex-wrap items-center gap-2 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-text-primary">{f.nombre}</span>
+                <span className="block text-xs text-text-muted">{f.nota}</span>
+              </span>
+              <Badge tone={f.listo ? "green" : "muted"}>{f.listo ? "Listo" : "Sin preparar"}</Badge>
+              <Badge tone={f.activo ? "navy" : "outline"}>{f.activo ? "Activo" : "Apagado"}</Badge>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-1 text-xs text-text-muted">
+          Se encienden con la variable indicada a «1» en Vercel. Calendario y firmas: después de la EIPD y la política interna.
+        </p>
+      </section>
+
+      <section className={`${card} p-4`}>
+        <SectionTitle>Permisos de la app de Microsoft</SectionTitle>
+        {graphError ? (
+          <p className="text-sm text-red-700">{graphError}</p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {PERMISOS_NECESARIOS.map((p) => {
+              const ok = graphRoles?.includes(p.rol);
+              return (
+                <li key={p.rol} className="flex items-center justify-between gap-2">
+                  <span>
+                    <code className="text-xs">{p.rol}</code> <span className="text-text-muted">· {p.para}</span>
+                  </span>
+                  <Badge tone={ok ? "green" : "red"}>{ok ? "Concedido" : "Falta"}</Badge>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className={`${card} p-4`}>
+        <SectionTitle>Dominios internos</SectionTitle>
+        <p className="mb-2 text-sm text-text-muted">
+          Los asistentes con estos dominios son de Impar y no se capturan. Separa con comas (todas las sociedades).
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input value={dom} onChange={(e) => setDom(e.target.value)} className={input} aria-label="Dominios internos" />
+          <button
+            type="button"
+            className={btn.secondary}
+            disabled={pending || dom === dominios}
+            onClick={() => run(() => guardarDominiosInternos(dom))}
+          >
+            Guardar
+          </button>
+        </div>
+      </section>
+
+      <section className={`${card} p-4`}>
+        <SectionTitle>Pruebas</SectionTitle>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            className={btn.secondary}
+            disabled={pending}
+            onClick={() =>
+              run(async () => {
+                setMsg("");
+                const r = await enviarmeResumenPrueba();
+                if (r.ok) setMsg("Resumen de prueba enviado a tu correo.");
+                return r;
+              })
+            }
+          >
+            Enviarme el resumen de prueba
+          </button>
+          <button
+            type="button"
+            className={btn.secondary}
+            disabled={pending || !flags.calendario}
+            onClick={() =>
+              run(async () => {
+                setMsg("");
+                const r = await sincronizarMiCalendario();
+                if (r.ok) setMsg(`Calendario sincronizado: ${r.data?.reuniones} reuniones con externos, ${r.data?.nuevas} contactos nuevos.`);
+                return r;
+              })
+            }
+          >
+            Sincronizar mi calendario ahora
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }

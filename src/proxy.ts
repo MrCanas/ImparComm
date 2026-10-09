@@ -19,8 +19,15 @@ export async function proxy(request: NextRequest) {
   const isServerAction = request.method === "POST" && request.headers.has("next-action");
 
   if (pathname.startsWith("/api/")) {
-    // Login y logout gestionan la cookie ellos mismos.
-    if (pathname.startsWith("/api/auth/")) return NextResponse.next();
+    // Login y logout gestionan la cookie ellos mismos. Los crons (CRON_SECRET) y el
+    // webhook de Graph (validationToken + clientState) se autentican en la ruta.
+    if (
+      pathname.startsWith("/api/auth/") ||
+      pathname.startsWith("/api/cron/") ||
+      pathname === "/api/graph/notificaciones"
+    ) {
+      return NextResponse.next();
+    }
     if (!isAuthenticated) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }

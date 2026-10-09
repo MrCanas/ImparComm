@@ -1,0 +1,50 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "31a6c5a2-8a13-4813-b95b-2515de7d9244",
+  "developer": {
+    "name": "Impar Capital",
+    "websiteUrl": "https://impar-comm.vercel.app",
+    "privacyUrl": "https://www.imparcapital.com",
+    "termsOfUseUrl": "https://www.imparcapital.com"
+  },
+  "name": {
+    "short": "ImparComm",
+    "full": "ImparComm · CRM relacional"
+  },
+  "description": {
+    "short": "Tus contactos externos y el ritual semanal",
+    "full": "Cada empleado ve las personas externas con las que se ha reunido, las clasifica en un ritual semanal y las invita a los hitos de Impar."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#1E2A56",
+  "staticTabs": [
+    {
+      "entityId": "ritual",
+      "name": "Ritual",
+      "contentUrl": "https://impar-comm.vercel.app/ritual",
+      "websiteUrl": "https://impar-comm.vercel.app/ritual",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "contactos",
+      "name": "Mis contactos",
+      "contentUrl": "https://impar-comm.vercel.app/contactos",
+      "websiteUrl": "https://impar-comm.vercel.app/contactos",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "hitos",
+      "name": "Hitos",
+      "contentUrl": "https://impar-comm.vercel.app/hitos",
+      "websiteUrl": "https://impar-comm.vercel.app/hitos",
+      "scopes": ["personal"]
+    }
+  ],
+  "permissions": ["identity"],
+  "validDomains": ["impar-comm.vercel.app"]
+}

@@ -120,7 +120,7 @@ export async function listHitoPersonas(db: CrmClient, hitoId: string): Promise<H
   const rows = check(
     await db
       .from("hito_persona")
-      .select(`hito_id, persona_id, estado, canal, incluida_por, contactado_por, fecha_contacto, persona:personas!inner(${PERSONA_SELECT})`)
+      .select(`hito_id, persona_id, estado, canal, incluida_por, contactado_por, fecha_contacto, zoho_estado, zoho_error, persona:personas!inner(${PERSONA_SELECT})`)
       .eq("hito_id", hitoId),
     "hito_persona",
   ) as Row[];
@@ -133,6 +133,8 @@ export async function listHitoPersonas(db: CrmClient, hitoId: string): Promise<H
       incluida_por: (r.incluida_por as string | null) ?? null,
       contactado_por: (r.contactado_por as string | null) ?? null,
       fecha_contacto: (r.fecha_contacto as string | null) ?? null,
+      zoho_estado: (r.zoho_estado as HitoPersona["zoho_estado"]) ?? null,
+      zoho_error: (r.zoho_error as string | null) ?? null,
       persona: mapPersona(one<Row>(r.persona)!),
     }))
     .sort((a, b) => a.persona.nombre.localeCompare(b.persona.nombre));
@@ -174,4 +176,55 @@ export async function nombresEmpleados(db: CrmClient, ids: string[]): Promise<Ma
   const { data, error } = await db.rpc("empleados_display", { p_ids: unique });
   if (error) throw new Error(`empleados_display: ${error.message}`);
   return new Map(((data ?? []) as { id: string; nombre: string }[]).map((e) => [e.id, e.nombre]));
+}
+
+export interface EventoGrande {
+  reunionId: string;
+  asunto: string | null;
+  fecha: string;
+  nExternos: number;
+  relacionIds: string[];
+}
+
+/**
+ * Reuniones con más externos que `evento_umbral_externos` (15 por defecto) que
+ * tienen al menos dos contactos nuevos del empleado: en el ritual se agrupan en
+ * una tarjeta «Evento». Cada persona va al evento grande más reciente.
+ */
+export async function eventosGrandes(db: CrmClient, nuevas: Relacion[]): Promise<EventoGrande[]> {
+  if (nuevas.length === 0) return [];
+  const { data: cfg } = await db.from("config").select("valor").eq("clave", "evento_umbral_externos").maybeSingle();
+  const umbral = Number(cfg?.valor ?? 15) || 15;
+  const porPersona = new Map(nuevas.map((r) => [r.persona.id, r.id]));
+
+  const rows = check(
+    await db
+      .from("asistentes")
+      .select("persona_id, reunion:reuniones!inner(id, asunto, fecha, n_externos)")
+      .in("persona_id", [...porPersona.keys()])
+      .gt("reunion.n_externos", umbral),
+    "eventos",
+  ) as Row[];
+
+  const elegido = new Map<string, { id: string; asunto: string | null; fecha: string; n_externos: number }>();
+  for (const r of rows) {
+    const reunion = one<{ id: string; asunto: string | null; fecha: string; n_externos: number }>(r.reunion);
+    if (!reunion) continue;
+    const actual = elegido.get(r.persona_id as string);
+    if (!actual || reunion.fecha > actual.fecha) elegido.set(r.persona_id as string, reunion);
+  }
+
+  const grupos = new Map<string, EventoGrande>();
+  for (const [personaId, reunion] of elegido) {
+    const g = grupos.get(reunion.id) ?? {
+      reunionId: reunion.id,
+      asunto: reunion.asunto,
+      fecha: reunion.fecha,
+      nExternos: reunion.n_externos,
+      relacionIds: [],
+    };
+    g.relacionIds.push(porPersona.get(personaId)!);
+    grupos.set(reunion.id, g);
+  }
+  return [...grupos.values()].filter((g) => g.relacionIds.length >= 2).sort((a, b) => b.fecha.localeCompare(a.fecha));
 }

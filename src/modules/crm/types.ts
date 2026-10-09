@@ -52,6 +52,8 @@ export interface HitoPersona {
   incluida_por: string | null;
   contactado_por: string | null;
   fecha_contacto: string | null;
+  zoho_estado: "ok" | "error" | "desactivado" | null;
+  zoho_error: string | null;
   persona: Persona;
 }
 
