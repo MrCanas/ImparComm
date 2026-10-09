@@ -13,6 +13,7 @@ export default async function MasPage() {
 
   const enlaces: { href: string; label: string; desc: string; icon: IconName; show: boolean }[] = [
     { href: "/contactos/nuevo", label: "Añadir contacto", desc: "Comidas y encuentros fuera del calendario", icon: "plus", show: true },
+    { href: "/analiticas", label: "Analíticas", desc: "Tu juego: nivel, racha, logros y gráficas", icon: "chart", show: true },
     { href: "/bolsa", label: "Bolsa común", desc: "Contactos de antiguos empleados", icon: "inbox", show: user.canSeeBolsa },
     { href: "/admin", label: "Administración", desc: "Equipo, etiquetas, bonos y permisos", icon: "shield", show: user.isAdmin },
   ];

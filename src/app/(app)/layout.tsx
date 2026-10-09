@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { FxProvider } from "@/components/fx/FxProvider";
 import { AddFab } from "@/components/layout/AddFab";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -33,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   };
 
   return (
+    <FxProvider>
     <div className="flex min-h-dvh flex-col bg-page">
       <AppHeader user={shellUser} pendientes={pendientes} />
       <main className="mx-auto w-full max-w-6xl flex-1 px-3 pt-4 pb-28 sm:px-4 lg:px-6 lg:pt-6 lg:pb-10">
@@ -44,5 +46,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ImparComm · Impar Capital · Uso interno y confidencial.
       </footer>
     </div>
+    </FxProvider>
   );
 }
