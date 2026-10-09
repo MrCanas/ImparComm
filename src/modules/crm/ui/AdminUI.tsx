@@ -557,7 +557,11 @@ export function IntegracionesAdmin({
               run(async () => {
                 setMsg("");
                 const r = await sincronizarMiCalendario();
-                if (r.ok) setMsg(`Calendario sincronizado: ${r.data?.reuniones} reuniones con externos, ${r.data?.nuevas} contactos nuevos.`);
+                if (r.ok)
+                  setMsg(
+                    `Calendario sincronizado: ${r.data?.reuniones} reuniones con externos, ${r.data?.nuevas} contactos nuevos` +
+                      (r.data?.firmas != null ? `, ${r.data.firmas} completados desde la firma.` : "."),
+                  );
                 return r;
               })
             }

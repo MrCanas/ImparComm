@@ -318,6 +318,7 @@ export function RitualDeck({
         </div>
 
         <article
+          key={actual.id}
           className={`${card} relative touch-pan-y select-none p-4 sm:p-6 ${dx === 0 || saliendo ? "transition-transform duration-200" : ""}`}
           style={{ transform }}
           onPointerDown={onPointerDown}

@@ -8,6 +8,7 @@ import { datosResumen, plantillaResumen } from "@/lib/email/resumen";
 import { sendGraphMail } from "@/lib/email/mailer";
 import { flags } from "@/lib/flags";
 import { sincronizarEmpleado } from "@/lib/graph/calendario";
+import { completarFirmas } from "@/lib/graph/firmas";
 import { registrarContactoEnZoho } from "@/lib/zoho/contactos";
 import type { TipoEtiqueta } from "@/modules/crm/types";
 
@@ -523,25 +524,29 @@ export async function enviarmeResumenPrueba(): Promise<ActionResult<{ enviado: b
 }
 
 /** Sincroniza ahora el calendario del propio administrador (últimos 30 días + 14). */
-export async function sincronizarMiCalendario(): Promise<ActionResult<{ nuevas: number; reuniones: number }>> {
+export async function sincronizarMiCalendario(): Promise<
+  ActionResult<{ nuevas: number; reuniones: number; firmas: number | null }>
+> {
   try {
     const { user } = await getCrm();
     if (!user.isAdmin) return { ok: false, error: "No autorizado" };
     if (!flags.calendario) return { ok: false, error: "CALENDARIO_ENABLED no está activo" };
     const ahora = Date.now();
+    const empleado = { id: user.id, email: user.email, nombre: user.name };
     const r = await sincronizarEmpleado(
-      { id: user.id, email: user.email, nombre: user.name },
+      empleado,
       new Date(ahora - 30 * 86_400_000),
       new Date(ahora + 14 * 86_400_000),
     );
+    const firmas = flags.firmas ? (await completarFirmas(empleado)).actualizadas : null;
     revalidatePath("/", "layout");
-    return { ok: true, data: { nuevas: r.relacionesNuevas, reuniones: r.conExternos } };
+    return { ok: true, data: { nuevas: r.relacionesNuevas, reuniones: r.conExternos, firmas } };
   } catch (err) {
     return fail(err);
   }
 }
 
-export async function guardarDominiosInternos(texto: string): Promise<ActionResult> {
+export async function guardarDominiosInternos(texto: string): Promise<ActionResult<{ purgadas: number }>> {
   try {
     const dominios = [...new Set(texto.split(/[\s,;]+/).map((d) => d.trim().toLowerCase().replace(/^@/, "")).filter(Boolean))];
     if (dominios.length === 0) return { ok: false, error: "Indica al menos un dominio" };
@@ -550,8 +555,11 @@ export async function guardarDominiosInternos(texto: string): Promise<ActionResu
     if (!user.isAdmin) return { ok: false, error: "No autorizado" };
     const { error } = await db.from("config").upsert({ clave: "dominios_internos", valor: dominios, updated_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
-    revalidatePath("/admin");
-    return { ok: true };
+    // Lo capturado antes de declarar internos esos dominios deja de ser un contacto.
+    const { data: purgadas, error: ep } = await db.rpc("purgar_dominios_internos");
+    if (ep) throw new Error(ep.message);
+    revalidatePath("/", "layout");
+    return { ok: true, data: { purgadas: (purgadas as number) ?? 0 } };
   } catch (err) {
     return fail(err);
   }

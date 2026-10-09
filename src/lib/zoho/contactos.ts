@@ -1,7 +1,7 @@
 /**
  * Paso a Zoho al marcar Contactado en un hito (ZOHO_SYNC_ENABLED=1):
  * 1. Contacto por email: si no existe se crea con propietario = el empleado que
- *    contacta; si existe se actualizan teléfono y cargo (sin cambiar propietario).
+ *    contacta; si existe solo se completan teléfono y cargo vacíos.
  * 2. Campaign del hito (módulo estándar Campaigns): se crea la primera vez.
  * 3. El contacto se añade a la Campaign con el estado de miembro configurado.
  *
@@ -12,9 +12,13 @@ import { crmService } from "@/lib/db/service";
 import { flags } from "@/lib/flags";
 import { zohoApi } from "@/lib/zoho/client";
 
-/** Valor del picklist Member_Status de Campaigns para «Contactado». */
+/**
+ * Valor de Member_Status (Campaigns → Contacts) para «Contactado». Zoho solo
+ * admite sus valores estándar (Planned, Invited, Sent, Received, Opened,
+ * Responded, Bounced, Opted Out): contactar a alguien para un hito = «Invited».
+ */
 function estadoMiembro(): string {
-  return process.env.ZOHO_MEMBER_STATUS_CONTACTADO?.trim() || "Contacted";
+  return process.env.ZOHO_MEMBER_STATUS_CONTACTADO?.trim() || "Invited";
 }
 
 interface ZohoUser {
@@ -24,12 +28,41 @@ interface ZohoUser {
 
 let usuariosCache: { at: number; users: ZohoUser[] } | null = null;
 
+/**
+ * Usuario de Zoho del empleado (propietario del contacto). Necesita el scope
+ * ZohoCRM.users.READ; sin él devuelve null y Zoho asigna el propietario por
+ * defecto (el usuario del token) en vez de fallar.
+ */
 async function zohoUserId(email: string): Promise<string | null> {
   if (!usuariosCache || Date.now() - usuariosCache.at > 10 * 60_000) {
-    const r = await zohoApi<{ users?: ZohoUser[] }>("/users?type=ActiveUsers&per_page=200");
-    usuariosCache = { at: Date.now(), users: r.users ?? [] };
+    try {
+      const r = await zohoApi<{ users?: ZohoUser[] }>("/users?type=ActiveUsers&per_page=200");
+      usuariosCache = { at: Date.now(), users: r.users ?? [] };
+    } catch (err) {
+      console.warn("[zoho] sin acceso a usuarios (falta ZohoCRM.users.READ):", err instanceof Error ? err.message : err);
+      usuariosCache = { at: Date.now(), users: [] };
+    }
   }
   return usuariosCache.users.find((u) => u.email.toLowerCase() === email.toLowerCase())?.id ?? null;
+}
+
+/**
+ * Campos de teléfono y cargo de Contacts según el layout real de la cuenta
+ * (cada organización los renombra u oculta): teléfono = Phone o, si no
+ * existe, Mobile; cargo = Title si existe. Se cachea 1 hora.
+ */
+let camposCache: { at: number; telefono: string | null; cargo: string | null } | null = null;
+
+async function camposContacto(): Promise<{ telefono: string | null; cargo: string | null }> {
+  if (camposCache && Date.now() - camposCache.at < 60 * 60_000) return camposCache;
+  const r = await zohoApi<{ fields?: { api_name: string }[] }>("/settings/fields?module=Contacts");
+  const nombres = new Set((r.fields ?? []).map((f) => f.api_name));
+  camposCache = {
+    at: Date.now(),
+    telefono: nombres.has("Phone") ? "Phone" : nombres.has("Mobile") ? "Mobile" : null,
+    cargo: nombres.has("Title") ? "Title" : null,
+  };
+  return camposCache;
 }
 
 function partirNombre(nombre: string): { First_Name?: string; Last_Name: string } {
@@ -71,14 +104,25 @@ export async function registrarContactoEnZoho(input: {
       );
       contactId = found.data?.[0]?.id ?? null;
     }
+    const campo = await camposContacto();
     const campos: Record<string, unknown> = {
       ...partirNombre(persona.nombre as string),
       Email: persona.email,
-      ...(persona.telefono ? { Phone: persona.telefono } : {}),
-      ...(persona.cargo ? { Title: persona.cargo } : {}),
+      ...(campo.telefono && persona.telefono ? { [campo.telefono]: persona.telefono } : {}),
+      ...(campo.cargo && persona.cargo ? { [campo.cargo]: persona.cargo } : {}),
     };
     if (contactId) {
-      await zohoApi(`/Contacts/${contactId}`, { method: "PUT", body: JSON.stringify({ data: [campos] }) });
+      // Contacto existente: solo se completan teléfono y cargo vacíos; nunca se
+      // sobrescribe lo que ya hay en Zoho.
+      const leer = [campo.telefono, campo.cargo].filter(Boolean).join(",") || "Email";
+      const actual = await zohoApi<{ data?: Record<string, unknown>[] }>(`/Contacts/${contactId}?fields=${leer}`);
+      const enZoho = actual.data?.[0] ?? {};
+      const completar: Record<string, unknown> = {};
+      if (campo.telefono && !enZoho[campo.telefono] && persona.telefono) completar[campo.telefono] = persona.telefono;
+      if (campo.cargo && !enZoho[campo.cargo] && persona.cargo) completar[campo.cargo] = persona.cargo;
+      if (Object.keys(completar).length > 0) {
+        await zohoApi(`/Contacts/${contactId}`, { method: "PUT", body: JSON.stringify({ data: [completar] }) });
+      }
     } else {
       const owner = await zohoUserId(input.empleadoEmail);
       const creado = await zohoApi<{ data: { details: { id: string } }[] }>("/Contacts", {
