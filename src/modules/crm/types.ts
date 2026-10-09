@@ -64,5 +64,6 @@ export const TIPOS_HITO = [
   "Evento",
   "Comercialización",
   "Newsletter / informe",
+  "Relación",
   "Otro",
 ] as const;
