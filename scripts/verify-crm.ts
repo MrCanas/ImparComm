@@ -151,6 +151,31 @@ async function main() {
   const { data: nombres } = await A.db.rpc("empleados_display", { p_ids: [B.id] });
   ok((nombres as unknown[])?.length === 1, "Nombre del empleado resoluble para «Contactado por»");
 
+  // 6b. Historial de movimientos (006): incluir → contactar → volver a pte
+  await B.db.from("hito_persona").update({ estado: "pte", canal: null, contactado_por: null, fecha_contacto: null })
+    .eq("hito_id", hito!.id).eq("persona_id", p1);
+  const { data: evs } = await B.db.from("hito_eventos").select("accion, empleado_id, canal").eq("hito_id", hito!.id).order("id");
+  const acciones = (evs ?? []).map((e) => e.accion).join(",");
+  ok(acciones === "incluir,contactar,volver_pte", `El trigger registra los movimientos del hito (${acciones})`);
+  ok((evs ?? []).every((e) => e.empleado_id === B.id), "Cada evento lleva al empleado que lo hizo");
+  const { data: evsA } = await A.db.from("hito_eventos").select("id").eq("hito_id", hito!.id);
+  ok((evsA ?? []).length === 3, "El admin ve el historial del hito");
+  const { data: statsB, error: esB } = await B.db.rpc("stats_empleado", { p_desde: new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10) });
+  ok(!esB && (statsB as { totales: { incluidos: number } }).totales.incluidos >= 1, `stats_empleado propias (${esB?.message ?? "ok"})`);
+  const { error: esAjena } = await B.db.rpc("stats_empleado", { p_desde: "2026-01-01", p_empleado: A.id });
+  ok(!!esAjena, "Un no admin no puede ver las estadísticas de otro");
+  const { error: eqA } = await A.db.rpc("stats_equipo", { p_desde: "2026-01-01" });
+  ok(!eqA, `stats_equipo para admin (${eqA?.message ?? "ok"})`);
+  const { error: eqB } = await B.db.rpc("stats_equipo", { p_desde: "2026-01-01" });
+  ok(!!eqB, "Un no admin no puede ver las estadísticas del equipo");
+  const { data: resB } = await B.db.rpc("hitos_resumen");
+  ok((resB as { hito_id: string; total: number }[]).some((r) => r.hito_id === hito!.id && Number(r.total) === 1), "hitos_resumen cuenta los invitados visibles");
+  const { data: posB, error: epB } = await B.db.rpc("mi_posicion", { p_desde: "2026-01-01" });
+  ok(!epB && (posB as { posicion: number }).posicion >= 1, "mi_posicion devuelve la posición propia");
+  await B.db.from("hito_persona")
+    .update({ estado: "contactado", canal: "Email", contactado_por: B.id, fecha_contacto: new Date().toISOString() })
+    .eq("hito_id", hito!.id).eq("persona_id", p1);
+
   // 7. Resumen admin y bloqueo a no admin
   const { data: resumen, error: er } = await A.db.rpc("resumen_empleados");
   ok(!er && (resumen as { empleado_id: string }[]).some((r) => r.empleado_id === B.id), "Resumen por empleado (admin)");
@@ -164,6 +189,8 @@ async function main() {
   if (item) {
     const { error: ea } = await A.db.rpc("adoptar_relacion", { p_relacion: item.relacion_id });
     ok(!ea, `El admin adopta de la bolsa (${ea?.message ?? "ok"})`);
+    const { data: sb, error: esb } = await A.db.rpc("stats_bolsa");
+    ok(!esb && typeof (sb as { mis_rescates: number }).mis_rescates === "number", `stats_bolsa para quien ve la bolsa (${esb?.message ?? "ok"})`);
   }
 
   await limpiar();
