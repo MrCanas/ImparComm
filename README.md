@@ -43,11 +43,27 @@ src/lib/graph, zoho   integraciones pendientes (stubs documentados)
 - Administrador: superadmin de icam (`app_user_account.is_platform_admin`) o `crm.permisos.es_admin`.
 - Bolsa común: `crm.permisos.ve_bolsa` o administrador. Un empleado está de baja si `app_user_account.is_active = false`.
 
+## Integraciones
+
+Todas vienen **apagadas** y se encienden poniendo su variable a `1` en Vercel. El estado real (permisos de Microsoft, credenciales de Zoho, suscripciones, último envío) se ve en **Administración → Integraciones**.
+
+| Integración | Variable | Necesita |
+| --- | --- | --- |
+| Captura de reuniones (webhook + repaso nocturno 02:00 UTC) | `CALENDARIO_ENABLED` | Permiso de aplicación **Calendars.Read** con consentimiento del administrador · EIPD y política interna |
+| Cargo y teléfono desde la firma | `FIRMAS_ENABLED` | Mail.Read (ya concedido) · EIPD |
+| Email semanal, viernes 9:00 Madrid | `RESUMEN_SEMANAL_ENABLED` | Mail.Send (ya concedido) y `EMAIL_FROM` |
+| Zoho CRM al marcar Contactado (contacto + Campaign del hito) | `ZOHO_SYNC_ENABLED` | Credenciales `ZOHO_*` con scopes de Contacts, Campaigns y Users · confirmar CRM Enterprise y el valor de `Member_Status` |
+
+Crons (`vercel.json`): `/api/cron/calendario` cada noche y `/api/cron/resumen-semanal` los viernes a las 7:00 y 8:00 UTC (solo actúa la que cae a las 9:00 en Madrid). Webhook de Graph: `/api/graph/notificaciones`.
+
+Teams: ver `teams/README.md` (pestaña personal; el bot del viernes queda pendiente).
+
 ## Fases
 
 1. ✅ Preparación: repo, Vercel, esquema `crm` con RLS.
-2. ✅ Mis contactos, alta manual, ficha, archivar/recuperar · ⏳ lectura de calendarios (Graph, pendiente de Entra).
-3. ✅ Ritual con tarjetas, deshacer, puntos y bonos · ⏳ email del viernes y Teams.
-4. ✅ Hitos generales/personales, candidatos por etiquetas, Pte → Contactado · ⏳ alta en Zoho y Campaigns.
-5. ✅ Panel de administrador, bolsa común, fusión de etiquetas, plazos · ⏳ firmas y tarjeta «Evento».
+2. ✅ Mis contactos, alta manual, ficha, archivar/recuperar · ✅ captura de calendario (código listo; falta Calendars.Read y encenderla).
+3. ✅ Ritual con tarjetas, deshacer, puntos y bonos · ✅ email del viernes y pestaña de Teams · ⏳ bot de Teams.
+4. ✅ Hitos, candidatos por etiquetas, Pte → Contactado · ✅ alta en Zoho y Campaigns (código listo; falta encenderla).
+5. ✅ Panel de administrador, bolsa común, fusión de etiquetas, plazos, firmas y tarjeta «Evento».
 6. ⏳ Envíos masivos desde comunicaciones de icam web dashboard.
+

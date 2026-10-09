@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { haceDias } from "@/lib/format";
 import { getCrm } from "@/lib/db/server";
-import { getPuntos, listEtiquetas, listMisRelaciones } from "@/modules/crm/data";
+import { eventosGrandes, getPuntos, listEtiquetas, listMisRelaciones } from "@/modules/crm/data";
 import { RitualDeck } from "@/modules/crm/ui/RitualDeck";
 
 export const metadata = { title: "Ritual" };
@@ -26,6 +26,8 @@ export default async function RitualPage({ searchParams }: { searchParams: Promi
     .filter((r) => new Date(r.ultima_reunion ?? r.created_at).getTime() >= desde)
     .sort((a, b) => (b.ultima_reunion ?? b.created_at).localeCompare(a.ultima_reunion ?? a.created_at));
 
+  const eventos = await eventosGrandes(db, cola);
+
   return (
     <div className="mx-auto max-w-xl">
       <PageHeader
@@ -35,6 +37,7 @@ export default async function RitualPage({ searchParams }: { searchParams: Promi
       <RitualDeck
         key={periodo}
         cola={cola}
+        eventos={eventos}
         etiquetas={etiquetas}
         periodo={periodo}
         totalPendientes={nuevas.length}

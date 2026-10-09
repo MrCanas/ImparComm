@@ -62,6 +62,8 @@ async function limpiar() {
   await c.from("hitos").delete().like("nombre", "[verify]%");
   await c.from("etiquetas").delete().like("nombre", "[verify]%");
   await c.from("empresas").delete().like("nombre", "[verify]%");
+  await c.from("empresas").delete().eq("dominio", DOMINIO);
+  await c.from("reuniones").delete().like("ical_uid", "verify-%");
 }
 
 async function main() {

@@ -3,11 +3,14 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/ui/PageHeader";
 import { getCrm } from "@/lib/db/server";
+import { flags } from "@/lib/flags";
+import { getGraphRoles } from "@/lib/graph/client";
 import { listEtiquetas, nombresEmpleados } from "@/modules/crm/data";
 import {
   BonosAdmin,
   ConfigAdmin,
   EtiquetasAdmin,
+  IntegracionesAdmin,
   PermisosAdmin,
   ResumenEquipo,
   type ResumenEmpleado,
@@ -20,6 +23,7 @@ const TABS = [
   { key: "etiquetas", label: "Etiquetas" },
   { key: "bonos", label: "Bonos" },
   { key: "permisos", label: "Permisos" },
+  { key: "integraciones", label: "Integraciones" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["key"];
@@ -73,6 +77,28 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     contenido = <PermisosAdmin filas={filas.map((p) => ({ ...p, nombre: nombres.get(p.user_id) ?? p.user_id }))} />;
   }
 
+  if (tab === "integraciones") {
+    const [roles, subs, envios, cfg] = await Promise.all([
+      getGraphRoles().catch((e: unknown) => (e instanceof Error ? e.message : "Error")),
+      db.from("graph_suscripciones").select("buzon, expira"),
+      db.from("envios_resumen").select("semana, enviado_en").order("enviado_en", { ascending: false }).limit(1),
+      db.from("config").select("valor").eq("clave", "dominios_internos").maybeSingle(),
+    ]);
+    const zohoVars = ["ZOHO_ACCOUNTS_URL", "ZOHO_API_DOMAIN", "ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN"];
+    contenido = (
+      <IntegracionesAdmin
+        flags={{ calendario: flags.calendario, firmas: flags.firmas, zoho: flags.zoho, resumen: flags.resumenSemanal }}
+        graphRoles={Array.isArray(roles) ? roles : null}
+        graphError={Array.isArray(roles) ? null : roles}
+        zohoFaltan={zohoVars.filter((v) => !process.env[v]?.trim())}
+        emailFrom={Boolean(process.env.EMAIL_FROM?.trim())}
+        suscripciones={(subs.data ?? []) as { buzon: string; expira: string }[]}
+        ultimoEnvio={(envios.data?.[0]?.enviado_en as string | undefined) ?? null}
+        dominios={((cfg.data?.valor as string[] | undefined) ?? ["imparcapital.com"]).join(", ")}
+      />
+    );
+  }
+
   return (
     <>
       <PageHeader title="Administración" subtitle="Vista consolidada del equipo y configuración de ImparComm." />
@@ -102,6 +128,7 @@ function Config({ cfg }: { cfg: Record<string, number> }) {
         plazo_defecto_dias: cfg.plazo_defecto_dias ?? 90,
         puntos_por_bono: cfg.puntos_por_bono ?? 50,
         importe_bono: cfg.importe_bono ?? 100,
+        evento_umbral_externos: cfg.evento_umbral_externos ?? 15,
       }}
     />
   );

@@ -8,7 +8,8 @@ import { Icon } from "@/components/ui/Icon";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { btn, card } from "@/components/ui/styles";
 import { fmtFecha } from "@/lib/format";
-import { cambiarEstado, clasificar, crearEtiqueta, deshacer } from "@/modules/crm/actions";
+import { archivarVarias, cambiarEstado, clasificar, crearEtiqueta, deshacer } from "@/modules/crm/actions";
+import type { EventoGrande } from "@/modules/crm/data";
 import type { Etiqueta, Relacion } from "@/modules/crm/types";
 import { Avatar } from "@/modules/crm/ui/ContactList";
 import { TagPicker } from "@/modules/crm/ui/TagPicker";
@@ -29,6 +30,7 @@ const PERIODOS = [
 
 export function RitualDeck({
   cola: colaInicial,
+  eventos: eventosIniciales = [],
   etiquetas,
   periodo,
   totalPendientes,
@@ -36,6 +38,7 @@ export function RitualDeck({
   porBono,
 }: {
   cola: Relacion[];
+  eventos?: EventoGrande[];
   etiquetas: Etiqueta[];
   periodo: "semana" | "mes" | "todo";
   totalPendientes: number;
@@ -45,7 +48,13 @@ export function RitualDeck({
   const router = useRouter();
   // La cola se congela al empezar: cada acción revalida la página y la cola del
   // servidor ya no traería las tarjetas hechas, lo que descuadraría el índice.
-  const [cola] = useState(colaInicial);
+  // Los asistentes de eventos grandes salen de la cola: van en su tarjeta «Evento».
+  const [eventos, setEventos] = useState(eventosIniciales);
+  const [cola, setCola] = useState(() => {
+    const enEventos = new Set(eventosIniciales.flatMap((e) => e.relacionIds));
+    return colaInicial.filter((r) => !enEventos.has(r.id));
+  });
+  const [archivadasEnEventos, setArchivadasEnEventos] = useState(0);
   const [indice, setIndice] = useState(0);
   const [historial, setHistorial] = useState<Hecho[]>([]);
   const [puntos, setPuntos] = useState(puntosIniciales);
@@ -64,7 +73,30 @@ export function RitualDeck({
   const elegidas = actual ? (seleccion[actual.id] ?? []) : [];
   const setElegidas = (fn: (s: Etiqueta[]) => Etiqueta[]) =>
     actual && setSeleccion((m) => ({ ...m, [actual.id]: fn(m[actual.id] ?? []) }));
-  const hechas = historial.length;
+  const hechas = historial.length + archivadasEnEventos;
+  const evento = eventos[0];
+
+  function revisarUnoAUno(ev: EventoGrande) {
+    const ids = new Set(ev.relacionIds);
+    const rels = colaInicial.filter((r) => ids.has(r.id));
+    setCola((c) => [...c.slice(0, indice), ...rels, ...c.slice(indice)]);
+    setEventos((es) => es.filter((e) => e.reunionId !== ev.reunionId));
+  }
+
+  function archivarEvento(ev: EventoGrande) {
+    setError("");
+    startTransition(async () => {
+      const res = await archivarVarias(ev.relacionIds);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      const n = res.data?.archivadas ?? 0;
+      setPuntos((p) => p + n);
+      setArchivadasEnEventos((a) => a + n);
+      setEventos((es) => es.filter((e) => e.reunionId !== ev.reunionId));
+    });
+  }
 
   function avanzar(direccion: "izq" | "der", hecho: Hecho) {
     setSaliendo(direccion);
@@ -200,6 +232,37 @@ export function RitualDeck({
     </div>
   );
 
+  if (evento) {
+    return (
+      <>
+        {selectorPeriodo}
+        {marcador}
+        <article className={`${card} p-4 sm:p-6`}>
+          <p className="text-xs font-medium uppercase tracking-wider text-icam-gold">Evento</p>
+          <h2 className="mt-1 text-lg font-semibold text-text-primary">{evento.asunto ?? "(sin asunto)"}</h2>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-text-muted">
+            <Icon name="calendar" className="h-4 w-4" />
+            {fmtFecha(evento.fecha)} · {evento.nExternos} externos
+          </p>
+          <p className="mt-3 text-sm">
+            <strong>{evento.relacionIds.length} contactos nuevos</strong> de esta reunión. Si fue un evento
+            multitudinario, puedes archivarlos de una vez (1 punto cada uno) o revisarlos uno a uno.
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <button type="button" className={btn.danger} disabled={pending} onClick={() => archivarEvento(evento)}>
+              <Icon name="archive" className="h-4 w-4" /> Archivar todos
+            </button>
+            <button type="button" className={btn.primary} disabled={pending} onClick={() => revisarUnoAUno(evento)}>
+              Revisar uno a uno
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-text-muted">Los archivados se pueden recuperar desde Mis contactos.</p>
+        </article>
+        {error ? <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+      </>
+    );
+  }
+
   if (!actual) {
     return (
       <>
@@ -255,6 +318,7 @@ export function RitualDeck({
         </div>
 
         <article
+          key={actual.id}
           className={`${card} relative touch-pan-y select-none p-4 sm:p-6 ${dx === 0 || saliendo ? "transition-transform duration-200" : ""}`}
           style={{ transform }}
           onPointerDown={onPointerDown}
