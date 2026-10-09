@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { NAV_ITEMS, isActive } from "@/components/layout/nav";
 import type { ShellUser } from "@/components/layout/types";
+import { nivelDe } from "@/modules/crm/gamificacion";
 
 export function initials(name: string, email: string): string {
   const parts = (name || email).trim().split(/\s+/).filter(Boolean);
@@ -20,7 +21,7 @@ export function initials(name: string, email: string): string {
  * una segunda fila de navegación horizontal con subrayado dorado.
  * En móvil la navegación vive en la barra inferior (BottomNav).
  */
-export function AppHeader({ user, pendientes }: { user: ShellUser; pendientes: number }) {
+export function AppHeader({ user, pendientes, xp }: { user: ShellUser; pendientes: number; xp: number }) {
   const pathname = usePathname();
   const items = NAV_ITEMS.filter(
     (i) => !i.requires || (i.requires === "admin" ? user.isAdmin : user.canSeeBolsa),
@@ -42,7 +43,10 @@ export function AppHeader({ user, pendientes }: { user: ShellUser; pendientes: n
           <span className="text-sm font-semibold tracking-wide text-icam-gold">ImparComm</span>
         </Link>
 
-        <UserMenu user={user} />
+        <div className="flex items-center gap-1">
+          <NivelChip xp={xp} />
+          <UserMenu user={user} />
+        </div>
       </div>
 
       <nav
@@ -73,6 +77,34 @@ export function AppHeader({ user, pendientes }: { user: ShellUser; pendientes: n
         })}
       </nav>
     </header>
+  );
+}
+
+/** Insignia de nivel: da un pequeño salto cuando sube la XP. */
+function NivelChip({ xp }: { xp: number }) {
+  const { actual, progreso } = nivelDe(xp);
+  const ref = useRef<HTMLAnchorElement>(null);
+  const previo = useRef(xp);
+  useEffect(() => {
+    if (xp > previo.current && ref.current) {
+      ref.current.classList.remove("animate-pop");
+      void ref.current.offsetWidth;
+      ref.current.classList.add("animate-pop");
+    }
+    previo.current = xp;
+  }, [xp]);
+  return (
+    <Link
+      ref={ref}
+      href="/analiticas"
+      className="flex h-9 items-center gap-1.5 rounded-full bg-white/10 pl-1.5 pr-3 text-xs font-semibold text-white transition hover:bg-white/20"
+      aria-label={`Nivel ${actual.nombre}, ${xp} XP`}
+    >
+      <span className="relative flex h-6 w-6 items-center justify-center rounded-full" style={{ background: `conic-gradient(#B89660 ${progreso * 360}deg, rgb(255 255 255 / 0.15) 0)` }}>
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-icam-900 text-[11px]">{actual.emoji}</span>
+      </span>
+      <span className="tabular-nums">{xp.toLocaleString("es-ES")} XP</span>
+    </Link>
   );
 }
 

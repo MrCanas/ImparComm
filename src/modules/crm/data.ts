@@ -1,4 +1,5 @@
 import type { CrmClient } from "@/lib/db/server";
+import type { TotalesJuego } from "@/modules/crm/gamificacion";
 import type { Etiqueta, Hito, HitoPersona, Persona, Relacion } from "@/modules/crm/types";
 
 /** Columnas de persona con empresa y etiquetas visibles (RLS filtra las personales ajenas). */
@@ -227,4 +228,99 @@ export async function eventosGrandes(db: CrmClient, nuevas: Relacion[]): Promise
     grupos.set(reunion.id, g);
   }
   return [...grupos.values()].filter((g) => g.relacionIds.length >= 2).sort((a, b) => b.fecha.localeCompare(a.fecha));
+}
+
+// ─── Gamificación y analíticas (migración 006) ──────────────────────────────
+
+export interface StatsEmpleado {
+  serie: { dia: string; contactados: number; clasificados: number; incluidos: number }[];
+  dias_activos: { dia: string; n: number }[];
+  canales: { canal: string; n: number }[];
+  hitos: { id: string; nombre: string; incluidos: number; contactados: number }[];
+  totales: TotalesJuego;
+}
+
+export interface StatsEquipo {
+  ranking: { id: string; nombre: string; contactados: number; clasificados: number; incluidos: number; xp: number }[];
+  semanal: { semana: string; contactados: number; clasificados: number }[];
+  hitos: { id: string; nombre: string; incluidos: number; contactados: number }[];
+}
+
+export interface StatsBolsa {
+  adopciones: { semana: string; n: number }[];
+  adoptados_mes: number;
+  mis_rescates: number;
+}
+
+export function desdeDias(dias: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - (dias - 1));
+  return d.toISOString().slice(0, 10);
+}
+
+async function rpc<T>(db: CrmClient, fn: string, args: Record<string, unknown> = {}): Promise<T> {
+  const { data, error } = await db.rpc(fn, args);
+  if (error) throw new Error(`${fn}: ${error.message}`);
+  return data as T;
+}
+
+export function getStatsEmpleado(db: CrmClient, desde: string, empleadoId?: string) {
+  return rpc<StatsEmpleado>(db, "stats_empleado", { p_desde: desde, ...(empleadoId ? { p_empleado: empleadoId } : {}) });
+}
+
+export function getStatsEquipo(db: CrmClient, desde: string) {
+  return rpc<StatsEquipo>(db, "stats_equipo", { p_desde: desde });
+}
+
+export function getMiPosicion(db: CrmClient, desde: string) {
+  return rpc<{ posicion: number; total: number; xp: number }>(db, "mi_posicion", { p_desde: desde });
+}
+
+export function getStatsBolsa(db: CrmClient) {
+  return rpc<StatsBolsa>(db, "stats_bolsa");
+}
+
+/** hito_id → totales y primeros nombres de los invitados visibles. */
+export async function getHitosResumen(db: CrmClient) {
+  const rows = await rpc<{ hito_id: string; total: number; contactados: number; nombres: string[] | null }[]>(db, "hitos_resumen");
+  return new Map(
+    (rows ?? []).map((r) => [r.hito_id, { total: Number(r.total), contactados: Number(r.contactados), nombres: r.nombres ?? [] }]),
+  );
+}
+
+export interface HitoEvento {
+  id: number;
+  hito_id: string;
+  persona_id: string;
+  empleado_id: string | null;
+  accion: "incluir" | "contactar" | "volver_pte" | "quitar";
+  canal: string | null;
+  created_at: string;
+}
+
+export async function listEventosHito(db: CrmClient, hitoId: string): Promise<HitoEvento[]> {
+  return check(
+    await db.from("hito_eventos").select("*").eq("hito_id", hitoId).order("created_at"),
+    "hito_eventos",
+  ) as HitoEvento[];
+}
+
+export async function listEventosDePersona(db: CrmClient, personaId: string) {
+  const rows = check(
+    await db
+      .from("hito_eventos")
+      .select("id, accion, canal, created_at, empleado_id, hito:hitos!inner(id, nombre)")
+      .eq("persona_id", personaId)
+      .order("created_at", { ascending: false })
+      .limit(30),
+    "eventos de persona",
+  ) as Row[];
+  return rows.map((r) => ({
+    id: r.id as number,
+    accion: r.accion as HitoEvento["accion"],
+    canal: (r.canal as string | null) ?? null,
+    created_at: r.created_at as string,
+    empleado_id: (r.empleado_id as string | null) ?? null,
+    hito: one<{ id: string; nombre: string }>(r.hito)!,
+  }));
 }

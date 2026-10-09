@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
+import { AnimatedNumber } from "@/components/fx/AnimatedNumber";
+import { useFx } from "@/components/fx/FxProvider";
 import { Icon } from "@/components/ui/Icon";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { btn, card } from "@/components/ui/styles";
@@ -46,6 +48,8 @@ export function RitualDeck({
   porBono: number;
 }) {
   const router = useRouter();
+  const fx = useFx();
+  const marcadorRef = useRef<HTMLSpanElement>(null);
   // La cola se congela al empezar: cada acción revalida la página y la cola del
   // servidor ya no traería las tarjetas hechas, lo que descuadraría el índice.
   // Los asistentes de eventos grandes salen de la cola: van en su tarjeta «Evento».
@@ -93,12 +97,28 @@ export function RitualDeck({
       }
       const n = res.data?.archivadas ?? 0;
       setPuntos((p) => p + n);
+      if (n > 0) premiar(n);
       setArchivadasEnEventos((a) => a + n);
       setEventos((es) => es.filter((e) => e.reunionId !== ev.reunionId));
     });
   }
 
+  /** «+N» flotante y, si se cruza un múltiplo de `porBono`, celebración de bono. */
+  function premiar(n: number) {
+    fx.flotar(`+${n} ⭐`, marcadorRef.current);
+    if (Math.floor((puntos + n) / porBono) > Math.floor(puntos / porBono)) {
+      fx.celebrar("bono");
+      fx.avisar({ emoji: "🎁", titulo: "¡Bono conseguido!", detalle: `Has llegado a ${puntos + n} puntos` });
+    }
+  }
+
   function avanzar(direccion: "izq" | "der", hecho: Hecho) {
+    if (indice + 1 === cola.length && eventos.length === 0) {
+      window.setTimeout(() => {
+        fx.celebrar("hito");
+        fx.avisar({ emoji: "🃏", titulo: "¡Ritual completado!", detalle: `${hechas + 1} contactos al día` });
+      }, 250);
+    }
     setSaliendo(direccion);
     setTimeout(() => {
       setHistorial((h) => [...h, hecho]);
@@ -126,6 +146,7 @@ export function RitualDeck({
         return;
       }
       setPuntos((p) => p + 1);
+      premiar(1);
       avanzar("der", { relacion: r, accion: "clasificar", añadidas: res.data?.añadidas ?? [] });
     });
   }
@@ -142,6 +163,7 @@ export function RitualDeck({
         return;
       }
       setPuntos((p) => p + 1);
+      premiar(1);
       avanzar("izq", { relacion: r, accion: "archivar", añadidas: [] });
     });
   }
@@ -226,8 +248,8 @@ export function RitualDeck({
         {Math.min(indice + 1, cola.length)} de {cola.length}
         {hechas > 0 ? ` · ${hechas} hecha${hechas === 1 ? "" : "s"}` : ""}
       </span>
-      <span className="inline-flex items-center gap-1 rounded-full bg-icam-gold/15 px-2.5 py-1 font-semibold text-[#7d6235]">
-        {puntos} pts · {((puntos % porBono) + porBono) % porBono}/{porBono}
+      <span ref={marcadorRef} className="inline-flex items-center gap-1 rounded-full bg-icam-gold/15 px-2.5 py-1 font-semibold text-[#7d6235]">
+        ⭐ <AnimatedNumber value={puntos} /> pts · {((puntos % porBono) + porBono) % porBono}/{porBono}
       </span>
     </div>
   );
