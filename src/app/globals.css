@@ -46,7 +46,7 @@ body {
   display: none;
 }
 
-/* ─── Capa de juego: animaciones ─────────────────────────────────────────── */
+/* ─── Animaciones de respuesta ─────────────────────────────────────────── */
 
 @keyframes fx-pop {
   0% { transform: scale(1); }
@@ -76,12 +76,6 @@ body {
   100% { box-shadow: 0 0 0 14px rgb(184 150 96 / 0); }
 }
 
-@keyframes fx-wiggle {
-  0%, 100% { transform: rotate(0); }
-  25% { transform: rotate(-8deg); }
-  75% { transform: rotate(8deg); }
-}
-
 @keyframes fx-flame {
   0%, 100% { transform: scale(1) rotate(-2deg); }
   50% { transform: scale(1.12) rotate(3deg); }
@@ -90,7 +84,6 @@ body {
 .animate-pop { animation: fx-pop 0.45s ease-out; }
 .animate-shake { animation: fx-shake 0.45s ease-in-out; }
 .animate-pulse-gold { animation: fx-pulse-gold 0.9s ease-out; }
-.animate-wiggle { animation: fx-wiggle 0.5s ease-in-out; }
 .animate-flame { animation: fx-flame 1.6s ease-in-out infinite; transform-origin: 50% 90%; }
 
 .fx-shimmer {

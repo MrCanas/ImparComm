@@ -242,7 +242,7 @@ export function ColumnasDobles({ data, xKey, series, height = 220 }: { data: Rec
  */
 export function BarRanking({
   items,
-  unidad = "XP",
+  unidad = "",
   destacar,
 }: {
   items: { id: string; nombre: string; valor: number; detalle?: string }[];
@@ -250,7 +250,6 @@ export function BarRanking({
   destacar?: string;
 }) {
   const max = Math.max(1, ...items.map((i) => i.valor));
-  const medallas = ["🥇", "🥈", "🥉"];
   return (
     <ol className="space-y-2">
       {items.map((it, idx) => (
@@ -261,13 +260,19 @@ export function BarRanking({
           className={`rounded-md px-2 py-1.5 ${it.id === destacar ? "bg-icam-gold/10 ring-1 ring-icam-gold/40" : ""}`}
         >
           <div className="mb-1 flex items-center gap-2 text-sm">
-            <span className="w-6 text-center tabular-nums text-text-muted">{medallas[idx] ?? idx + 1}</span>
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
+                idx < 3 ? "bg-icam-900 text-white" : "bg-subtle text-text-muted"
+              }`}
+            >
+              {idx + 1}
+            </span>
             <span className="min-w-0 flex-1 truncate font-medium text-text-primary">
               {it.nombre}
               {it.id === destacar ? <span className="ml-1 text-xs font-normal text-text-muted">(tú)</span> : null}
             </span>
             <span className="tabular-nums font-semibold text-text-primary">
-              {nf(it.valor)} <span className="text-xs font-normal text-text-muted">{unidad}</span>
+              {nf(it.valor)} {unidad ? <span className="text-xs font-normal text-text-muted">{unidad}</span> : null}
             </span>
           </div>
           <div className="ml-8 h-2 overflow-hidden rounded-full bg-subtle">

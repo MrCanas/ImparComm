@@ -105,18 +105,17 @@ export function RitualDeck({
 
   /** «+N» flotante y, si se cruza un múltiplo de `porBono`, celebración de bono. */
   function premiar(n: number) {
-    fx.flotar(`+${n} ⭐`, marcadorRef.current);
+    fx.flotar(`+${n}`, marcadorRef.current);
     if (Math.floor((puntos + n) / porBono) > Math.floor(puntos / porBono)) {
       fx.celebrar("bono");
-      fx.avisar({ emoji: "🎁", titulo: "¡Bono conseguido!", detalle: `Has llegado a ${puntos + n} puntos` });
+      fx.avisar({ icon: "star", titulo: "Bono conseguido", detalle: `Has llegado a ${puntos + n} puntos` });
     }
   }
 
   function avanzar(direccion: "izq" | "der", hecho: Hecho) {
     if (indice + 1 === cola.length && eventos.length === 0) {
       window.setTimeout(() => {
-        fx.celebrar("hito");
-        fx.avisar({ emoji: "🃏", titulo: "¡Ritual completado!", detalle: `${hechas + 1} contactos al día` });
+        fx.avisar({ icon: "check", titulo: "Ritual completado", detalle: `${hechas + 1} contactos al día` });
       }, 250);
     }
     setSaliendo(direccion);
@@ -249,7 +248,7 @@ export function RitualDeck({
         {hechas > 0 ? ` · ${hechas} hecha${hechas === 1 ? "" : "s"}` : ""}
       </span>
       <span ref={marcadorRef} className="inline-flex items-center gap-1 rounded-full bg-icam-gold/15 px-2.5 py-1 font-semibold text-[#7d6235]">
-        ⭐ <AnimatedNumber value={puntos} /> pts · {((puntos % porBono) + porBono) % porBono}/{porBono}
+        <AnimatedNumber value={puntos} /> pts · {((puntos % porBono) + porBono) % porBono}/{porBono}
       </span>
     </div>
   );

@@ -146,8 +146,7 @@ export function HitoBoard({
 
   function celebrarContacto(personaId: string, nuevoInvitado: boolean) {
     const el = document.querySelector(`[data-card="${personaId}"]`) ?? ringRef.current;
-    fx.celebrar("contacto", el);
-    fx.flotar("+1 ⭐", el);
+    fx.flotar("+1", el);
     ringRef.current?.classList.remove("animate-pulse-gold");
     void ringRef.current?.offsetWidth;
     ringRef.current?.classList.add("animate-pulse-gold");
@@ -155,7 +154,7 @@ export function HitoBoard({
     if (contactados + 1 === total) {
       window.setTimeout(() => {
         fx.celebrar("hito");
-        fx.avisar({ emoji: "🏁", titulo: "¡Hito completado!", detalle: `Has contactado a tus ${total} invitados` });
+        fx.avisar({ icon: "flag", titulo: "Hito completado", detalle: `Has contactado a tus ${total} invitados` });
       }, 450);
     }
   }
@@ -163,7 +162,7 @@ export function HitoBoard({
   function incluir(ids: string[]) {
     if (ids.length === 0) return;
     ejecutar({ tipo: "mover", personaIds: ids, a: "pte" }, () => incluirEnHito(hitoId, ids), () => {
-      fx.flotar(ids.length > 1 ? `+${ids.length} invitados` : "¡Invitado!", document.querySelector(`[data-card="${ids[0]}"]`));
+      fx.flotar(ids.length > 1 ? `+${ids.length} invitados` : "Invitado", document.querySelector(`[data-card="${ids[0]}"]`));
     });
   }
 
@@ -540,7 +539,7 @@ function TarjetaDraggable({
       {t.col === "contactado" && m ? (
         <div className="mt-2 space-y-1.5">
           <p className="text-xs text-text-muted">
-            ✅ {m.contactadoPorNombre ?? "—"}, {fmtFechaCorta(m.fecha_contacto)}
+            {m.contactadoPorNombre ?? "—"}, {fmtFechaCorta(m.fecha_contacto)}
             {m.canal ? ` · ${m.canal}` : ""}
             {m.zoho_estado === "ok" ? " · En Zoho" : ""}
           </p>

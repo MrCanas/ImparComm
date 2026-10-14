@@ -6,11 +6,12 @@ import Link from "next/link";
 import { AreaTrend, BarRanking, ColumnasDobles, DonutChart, Funnel, Heatmap } from "@/components/charts/Charts";
 import { AnimatedNumber } from "@/components/fx/AnimatedNumber";
 import { Reveal } from "@/components/fx/Reveal";
+import { Icon, type IconName } from "@/components/ui/Icon";
 import { SectionTitle } from "@/components/ui/PageHeader";
 import { card } from "@/components/ui/styles";
 import type { StatsEmpleado, StatsEquipo } from "@/modules/crm/data";
-import type { Logro } from "@/modules/crm/gamificacion";
-import { TarjetaJuego, VitrinaLogros } from "@/modules/crm/ui/Juego";
+import type { Objetivo } from "@/modules/crm/gamificacion";
+import { ListaObjetivos, ResumenActividad } from "@/modules/crm/ui/Actividad";
 
 export const RANGOS = [7, 30, 90] as const;
 
@@ -43,11 +44,11 @@ function Segmentos<T extends string | number>({
   );
 }
 
-function Kpi({ titulo, valor, sub, emoji, i }: { titulo: string; valor: number; sub: string; emoji: string; i: number }) {
+function Kpi({ titulo, valor, sub, icon, i }: { titulo: string; valor: number; sub: string; icon: IconName; i: number }) {
   return (
     <Reveal index={i} className={`${card} fx-lift p-4`}>
       <p className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-text-muted">
-        {titulo} <span className="text-lg" aria-hidden="true">{emoji}</span>
+        {titulo} <Icon name={icon} className="h-4 w-4 text-icam-gold" />
       </p>
       <p className="mt-1 text-3xl font-semibold text-text-primary">
         <AnimatedNumber value={valor} />
@@ -64,7 +65,7 @@ export function Analiticas({
   stats,
   equipo,
   hoy,
-  juego,
+  resumen,
   userId,
 }: {
   rango: number;
@@ -73,7 +74,7 @@ export function Analiticas({
   stats: StatsEmpleado;
   equipo: StatsEquipo | null;
   hoy: string;
-  juego: { xp: number; racha: number; mejorRacha: number; posicion: number; totalEquipo: number; logros: Logro[] };
+  resumen: { racha: number; mejorRacha: number; posicion: number; totalEquipo: number; objetivos: Objetivo[] };
   userId: string;
 }) {
   const href = (r: number, v: string = vista) => `/analiticas?rango=${r}${v === "equipo" ? "&vista=equipo" : ""}`;
@@ -88,7 +89,7 @@ export function Analiticas({
             actual={vista}
             href={(v) => href(rango, v)}
             opciones={[
-              { valor: "yo", label: "Mi juego" },
+              { valor: "yo", label: "Mi actividad" },
               { valor: "equipo", label: "Equipo" },
             ]}
           />
@@ -102,13 +103,13 @@ export function Analiticas({
         <VistaEquipo equipo={equipo} rango={rango} userId={userId} />
       ) : (
         <>
-          <TarjetaJuego {...juego} />
+          <ResumenActividad {...resumen} />
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Kpi i={0} titulo="Contactados" valor={suma("contactados")} sub={`en hitos · ${rango} días`} emoji="✅" />
-            <Kpi i={1} titulo="Clasificados" valor={suma("clasificados")} sub={`en el ritual · ${rango} días`} emoji="🃏" />
-            <Kpi i={2} titulo="Invitados" valor={suma("incluidos")} sub={`a hitos · ${rango} días`} emoji="🎟️" />
-            <Kpi i={3} titulo="Récord diario" valor={stats.totales.max_contactos_dia} sub="contactos en un día" emoji="🚀" />
+            <Kpi i={0} titulo="Contactados" valor={suma("contactados")} sub={`en hitos · ${rango} días`} icon="check" />
+            <Kpi i={1} titulo="Clasificados" valor={suma("clasificados")} sub={`en el ritual · ${rango} días`} icon="cards" />
+            <Kpi i={2} titulo="Invitados" valor={suma("incluidos")} sub={`a hitos · ${rango} días`} icon="mail" />
+            <Kpi i={3} titulo="Récord diario" valor={stats.totales.max_contactos_dia} sub="contactos en un día" icon="fire" />
           </div>
 
           <section className={`${card} p-4`}>
@@ -141,8 +142,8 @@ export function Analiticas({
           </section>
 
           <section>
-            <SectionTitle>Vitrina de logros</SectionTitle>
-            <VitrinaLogros logros={juego.logros} />
+            <SectionTitle>Objetivos</SectionTitle>
+            <ListaObjetivos objetivos={resumen.objetivos} />
           </section>
         </>
       )}
@@ -159,16 +160,17 @@ function VistaEquipo({ equipo, rango, userId }: { equipo: StatsEquipo; rango: nu
   return (
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi i={0} titulo="Contactados" valor={tot.c} sub={`equipo · ${rango} días`} emoji="✅" />
-        <Kpi i={1} titulo="Clasificados" valor={tot.k} sub={`equipo · ${rango} días`} emoji="🃏" />
-        <Kpi i={2} titulo="Invitados" valor={tot.i} sub={`equipo · ${rango} días`} emoji="🎟️" />
-        <Kpi i={3} titulo="Jugadores activos" valor={activos} sub={`de ${equipo.ranking.length} empleados`} emoji="🎮" />
+        <Kpi i={0} titulo="Contactados" valor={tot.c} sub={`equipo · ${rango} días`} icon="check" />
+        <Kpi i={1} titulo="Clasificados" valor={tot.k} sub={`equipo · ${rango} días`} icon="cards" />
+        <Kpi i={2} titulo="Invitados" valor={tot.i} sub={`equipo · ${rango} días`} icon="mail" />
+        <Kpi i={3} titulo="Empleados activos" valor={activos} sub={`de ${equipo.ranking.length} empleados`} icon="users" />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <section className={`${card} p-4`}>
-          <SectionTitle>Clasificación · XP del periodo</SectionTitle>
+          <SectionTitle>Actividad del periodo · contactos + clasificados</SectionTitle>
           <BarRanking
+            unidad="acciones"
             destacar={userId}
             items={equipo.ranking.map((r) => ({
               id: r.id,

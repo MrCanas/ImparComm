@@ -11,8 +11,8 @@ import { btn, card } from "@/components/ui/styles";
 import { getCrm } from "@/lib/db/server";
 import { diasDesde, fmtFecha, hoyMadrid } from "@/lib/format";
 import { desdeDias, getHitosResumen, getMiPosicion, getPuntos, getStatsEmpleado, listHitos, listMisRelaciones } from "@/modules/crm/data";
-import { logrosDe, rachaDe, xpDe } from "@/modules/crm/gamificacion";
-import { TarjetaJuego } from "@/modules/crm/ui/Juego";
+import { objetivosDe, rachaDe } from "@/modules/crm/gamificacion";
+import { ResumenActividad } from "@/modules/crm/ui/Actividad";
 
 export default async function InicioPage() {
   const { db, user } = await getCrm();
@@ -27,7 +27,7 @@ export default async function InicioPage() {
 
   const hoy = hoyMadrid();
   const racha = rachaDe(stats.dias_activos.map((d) => d.dia), hoy);
-  const logros = logrosDe(stats.totales, racha.mejor);
+  const objetivos = objetivosDe(stats.totales, racha.mejor);
   const pendientes = relaciones.filter((r) => r.estado === "nueva");
   const activas = relaciones.filter((r) => r.estado !== "archivada");
   const vencidas = relaciones
@@ -40,17 +40,16 @@ export default async function InicioPage() {
   return (
     <div className="space-y-5 sm:space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-text-primary sm:text-2xl">Hola, {nombre} 👋</h1>
-        <p className="text-sm text-text-muted">Que ningún contacto quede olvidado. Cada contacto suma XP.</p>
+        <h1 className="text-xl font-semibold text-text-primary sm:text-2xl">Hola, {nombre}</h1>
+        <p className="text-sm text-text-muted">Que ningún contacto quede olvidado.</p>
       </div>
 
-      <TarjetaJuego
-        xp={xpDe(stats.totales)}
+      <ResumenActividad
         racha={racha.actual}
         mejorRacha={racha.mejor}
         posicion={posicion.posicion}
         totalEquipo={posicion.total}
-        logros={logros}
+        objetivos={objetivos}
       />
 
       {pendientes.length > 0 ? (
@@ -58,7 +57,7 @@ export default async function InicioPage() {
           href="/ritual"
           className="fx-lift flex items-center gap-4 rounded-lg border-2 border-icam-gold bg-card p-4 shadow-sm sm:p-5"
         >
-          <span className="flex h-12 w-12 shrink-0 animate-pulse-gold items-center justify-center rounded-full bg-icam-gold text-white [animation-iteration-count:infinite]">
+          <span className="flex h-12 w-12 shrink-0 animate-pulse-gold items-center justify-center rounded-full bg-icam-gold text-white [animation-duration:2.4s] [animation-iteration-count:infinite]">
             <Icon name="cards" className="h-6 w-6" />
           </span>
           <span className="min-w-0 flex-1">
@@ -67,7 +66,7 @@ export default async function InicioPage() {
               {pendientes.length === 1 ? "" : "s"}
             </span>
             <span className="block text-sm text-text-muted">
-              Unos {minutos} minuto{minutos === 1 ? "" : "s"} de ritual · hasta +{pendientes.length} ⭐
+              Unos {minutos} minuto{minutos === 1 ? "" : "s"} de ritual · {pendientes.length} punto{pendientes.length === 1 ? "" : "s"} para el bono
             </span>
           </span>
           <Icon name="chevronRight" className="h-5 w-5 shrink-0 text-icam-gold" />
@@ -147,7 +146,6 @@ export default async function InicioPage() {
           <div className={`${card} p-4`}>
             <SectionTitle>Bonos</SectionTitle>
             <div className="flex items-center gap-3">
-              <span className="text-2xl" aria-hidden="true">🎁</span>
               <ProgressBar value={puntos.haciaSiguiente / puntos.porBono} className="h-3 flex-1" label="Progreso hacia el próximo bono" />
             </div>
             <p className="mt-2 text-sm text-text-muted">

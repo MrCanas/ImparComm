@@ -1,21 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { logrosDe, nivelDe, rachaDe, tramoAntiguedad, xpDe } from "../gamificacion";
+import { objetivosDe, rachaDe, tramoAntiguedad } from "../gamificacion";
 
 const CERO = { puntos: 0, contactados: 0, incluidos: 0, max_contactos_dia: 0, hitos_completados: 0, adoptados: 0, bonos: 0 };
-
-test("nivel: límites de tramo y progreso", () => {
-  assert.equal(nivelDe(0).actual.nombre, "Bronce");
-  assert.equal(nivelDe(49).actual.nombre, "Bronce");
-  assert.equal(nivelDe(50).actual.nombre, "Plata");
-  assert.equal(nivelDe(100).progreso, 0.5);
-  assert.equal(nivelDe(100).faltan, 50);
-  const top = nivelDe(5000);
-  assert.equal(top.actual.nombre, "Impar");
-  assert.equal(top.siguiente, null);
-  assert.equal(top.progreso, 1);
-});
 
 test("racha: días seguidos hasta hoy", () => {
   const r = rachaDe(["2026-10-07", "2026-10-08", "2026-10-09"], "2026-10-09");
@@ -36,18 +24,15 @@ test("racha: duplicados y desorden no cuentan doble", () => {
   assert.deepEqual(rachaDe([], "2026-10-09"), { actual: 0, mejor: 0 });
 });
 
-test("logros: conseguidos y progreso parcial", () => {
-  const l = logrosDe({ ...CERO, contactados: 25, max_contactos_dia: 10 }, 3);
+test("objetivos: conseguidos y progreso parcial", () => {
+  const l = objetivosDe({ ...CERO, contactados: 25, max_contactos_dia: 10 }, 3);
   const by = new Map(l.map((x) => [x.id, x]));
   assert.equal(by.get("primer-contacto")!.conseguido, true);
   assert.equal(by.get("diez-dia")!.conseguido, true);
   assert.equal(by.get("cincuenta")!.conseguido, false);
   assert.equal(by.get("cincuenta")!.progreso, 0.5);
+  assert.equal(by.get("cincuenta")!.valor, 25);
   assert.equal(by.get("racha-7")!.conseguido, false);
-});
-
-test("xp: puntos del ritual + contactos", () => {
-  assert.equal(xpDe({ puntos: 10, contactados: 4 }), 14);
 });
 
 test("antigüedad: tramos", () => {

@@ -9,6 +9,7 @@ import { AnimatedNumber } from "@/components/fx/AnimatedNumber";
 import { Avatar } from "@/components/fx/AvatarStack";
 import { useFx } from "@/components/fx/FxProvider";
 import { Reveal } from "@/components/fx/Reveal";
+import { Icon, type IconName } from "@/components/ui/Icon";
 import { EmptyState, SectionTitle } from "@/components/ui/PageHeader";
 import { btn, card } from "@/components/ui/styles";
 import { fmtFecha } from "@/lib/format";
@@ -62,8 +63,7 @@ export function BolsaComun({ items, stats, hoy }: { items: BolsaItem[]; stats: S
 
   function adoptar(i: BolsaItem, el: Element | null) {
     setError("");
-    fx.celebrar("contacto", el);
-    fx.flotar("¡Rescatado! 🛟", el);
+    fx.flotar("Adoptado", el);
     startTransition(async () => {
       quitar(i.relacion_id);
       const res = await adoptarRelacion(i.relacion_id);
@@ -74,17 +74,16 @@ export function BolsaComun({ items, stats, hoy }: { items: BolsaItem[]; stats: S
       const n = rescates + 1;
       setRescates(n);
       if (n === 5) {
-        fx.celebrar("logro");
-        fx.avisar({ emoji: "🛟", titulo: "Logro desbloqueado: Rescatador", detalle: "Has adoptado 5 contactos de la bolsa" });
+        fx.avisar({ icon: "inbox", titulo: "Objetivo cumplido: 5 de la bolsa", detalle: "Has adoptado 5 contactos de la bolsa común" });
       }
       router.refresh();
     });
   }
 
-  const kpis = [
-    { t: "En la bolsa", n: lista.length, sub: "contactos esperando dueño", emoji: "📦" },
-    { t: "Adoptados este mes", n: stats.adoptados_mes + (rescates - stats.mis_rescates), sub: "por todo el equipo", emoji: "🤝" },
-    { t: "Tus rescates", n: rescates, sub: rescates >= 5 ? "¡Rescatador!" : `${5 - rescates} para el logro 🛟`, emoji: "🛟" },
+  const kpis: { t: string; n: number; sub: string; icon: IconName }[] = [
+    { t: "En la bolsa", n: lista.length, sub: "contactos sin dueño", icon: "inbox" },
+    { t: "Adoptados este mes", n: stats.adoptados_mes + (rescates - stats.mis_rescates), sub: "por todo el equipo", icon: "users" },
+    { t: "Adoptados por ti", n: rescates, sub: rescates >= 5 ? "Objetivo cumplido" : `${5 - rescates} para el objetivo`, icon: "check" },
   ];
 
   return (
@@ -92,7 +91,9 @@ export function BolsaComun({ items, stats, hoy }: { items: BolsaItem[]; stats: S
       <div className="grid gap-3 sm:grid-cols-3">
         {kpis.map((k, i) => (
           <Reveal key={k.t} index={i} className={`${card} fx-lift flex items-center gap-3 p-4`}>
-            <span className="text-3xl" aria-hidden="true">{k.emoji}</span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-icam-900/5 text-icam-900">
+              <Icon name={k.icon} className="h-5 w-5" />
+            </span>
             <span>
               <span className="block text-xs font-medium uppercase tracking-wider text-text-muted">{k.t}</span>
               <span className="block text-2xl font-semibold text-text-primary">
@@ -173,11 +174,11 @@ export function BolsaComun({ items, stats, hoy }: { items: BolsaItem[]; stats: S
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TONO_TRAMO[t]}`}>{t}</span>
                       <button
                         type="button"
-                        className={`${btn.gold} min-h-10`}
+                        className={`${btn.primary} min-h-10`}
                         disabled={pending}
                         onClick={(e) => adoptar(i, e.currentTarget)}
                       >
-                        🛟 Adoptar
+                        Adoptar
                       </button>
                     </div>
                   </motion.li>

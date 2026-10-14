@@ -6,6 +6,8 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { getCrm } from "@/lib/db/server";
+import { hoyMadrid } from "@/lib/format";
+import { rachaDe } from "@/modules/crm/gamificacion";
 
 async function contarPendientes(): Promise<number> {
   try {
@@ -21,16 +23,17 @@ async function contarPendientes(): Promise<number> {
   }
 }
 
-/** XP para la insignia de nivel de la cabecera: puntos del ritual + contactos en hitos. */
-async function contarXp(): Promise<number> {
+/** Racha para la cabecera: días seguidos con contactos en hitos o clasificaciones. */
+async function calcularRacha(): Promise<number> {
   try {
     const { db, user } = await getCrm();
-    const [puntos, contactos] = await Promise.all([
-      db.from("puntos").select("delta").eq("empleado_id", user.id),
-      db.from("hito_persona").select("persona_id", { count: "exact", head: true }).eq("contactado_por", user.id).eq("estado", "contactado"),
+    const desde = new Date(Date.now() - 120 * 86_400_000).toISOString();
+    const [eventos, puntos] = await Promise.all([
+      db.from("hito_eventos").select("created_at").eq("empleado_id", user.id).in("accion", ["contactar", "incluir"]).gte("created_at", desde),
+      db.from("puntos").select("created_at").eq("empleado_id", user.id).gt("delta", 0).gte("created_at", desde),
     ]);
-    const total = ((puntos.data ?? []) as { delta: number }[]).reduce((s, p) => s + p.delta, 0);
-    return total + (contactos.count ?? 0);
+    const dias = [...(eventos.data ?? []), ...(puntos.data ?? [])].map((r) => (r.created_at as string).slice(0, 10));
+    return rachaDe(dias, hoyMadrid()).actual;
   } catch {
     return 0;
   }
@@ -40,7 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [pendientes, xp] = await Promise.all([contarPendientes(), contarXp()]);
+  const [pendientes, racha] = await Promise.all([contarPendientes(), calcularRacha()]);
   const shellUser = {
     name: user.name,
     email: user.email,
@@ -51,7 +54,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <FxProvider>
     <div className="flex min-h-dvh flex-col bg-page">
-      <AppHeader user={shellUser} pendientes={pendientes} xp={xp} />
+      <AppHeader user={shellUser} pendientes={pendientes} racha={racha} />
       <main className="mx-auto w-full max-w-6xl flex-1 px-3 pt-4 pb-28 sm:px-4 lg:px-6 lg:pt-6 lg:pb-10">
         {children}
       </main>

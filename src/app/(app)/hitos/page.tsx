@@ -53,7 +53,7 @@ export default async function HitosPage() {
                         </span>
                       </>
                     ) : (
-                      <span className="text-xs italic text-text-muted">Sin invitados aún · ¡sé el primero!</span>
+                      <span className="text-xs italic text-text-muted">Sin invitados aún</span>
                     )}
                   </span>
                   {h.etiquetas_filtro.length > 0 ? (

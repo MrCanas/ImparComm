@@ -1,5 +1,5 @@
 import type { CrmClient } from "@/lib/db/server";
-import type { TotalesJuego } from "@/modules/crm/gamificacion";
+import type { TotalesActividad } from "@/modules/crm/gamificacion";
 import type { Etiqueta, Hito, HitoPersona, Persona, Relacion } from "@/modules/crm/types";
 
 /** Columnas de persona con empresa y etiquetas visibles (RLS filtra las personales ajenas). */
@@ -237,7 +237,7 @@ export interface StatsEmpleado {
   dias_activos: { dia: string; n: number }[];
   canales: { canal: string; n: number }[];
   hitos: { id: string; nombre: string; incluidos: number; contactados: number }[];
-  totales: TotalesJuego;
+  totales: TotalesActividad;
 }
 
 export interface StatsEquipo {

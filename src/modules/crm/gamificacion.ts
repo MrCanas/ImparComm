@@ -1,34 +1,10 @@
+import type { IconName } from "@/components/ui/Icon";
+
 /**
- * Lógica pura de la capa de juego: niveles, rachas, logros y tramos de
+ * Lógica pura de la capa de motivación: rachas, objetivos y tramos de
  * antigüedad. Sin dependencias de React ni de la base de datos, para poder
- * probarla con node:test.
- *
- * La experiencia (XP) es la suma de los puntos del ritual (ledger crm.puntos,
- * el que genera bonos) y los contactos marcados en hitos. Los bonos no cambian.
+ * probarla con node:test. Puntos y bonos no cambian.
  */
-
-export interface Nivel {
-  nombre: string;
-  emoji: string;
-  desde: number;
-  color: string;
-}
-
-export const NIVELES: Nivel[] = [
-  { nombre: "Bronce", emoji: "🥉", desde: 0, color: "#A86F3F" },
-  { nombre: "Plata", emoji: "🥈", desde: 50, color: "#8C96A8" },
-  { nombre: "Oro", emoji: "🥇", desde: 150, color: "#B89660" },
-  { nombre: "Platino", emoji: "💎", desde: 350, color: "#5B8DB8" },
-  { nombre: "Impar", emoji: "👑", desde: 700, color: "#1E2A56" },
-];
-
-export function nivelDe(xp: number) {
-  const idx = NIVELES.reduce((acc, n, i) => (xp >= n.desde ? i : acc), 0);
-  const actual = NIVELES[idx];
-  const siguiente = NIVELES[idx + 1] ?? null;
-  const progreso = siguiente ? (xp - actual.desde) / (siguiente.desde - actual.desde) : 1;
-  return { actual, siguiente, progreso: Math.max(0, Math.min(1, progreso)), faltan: siguiente ? siguiente.desde - xp : 0 };
-}
 
 const DIA_MS = 86_400_000;
 
@@ -59,7 +35,7 @@ export function rachaDe(diasActivos: string[], hoy: string): { actual: number; m
   return { actual, mejor };
 }
 
-export interface TotalesJuego {
+export interface TotalesActividad {
   puntos: number;
   contactados: number;
   incluidos: number;
@@ -69,44 +45,44 @@ export interface TotalesJuego {
   bonos: number;
 }
 
-export interface Logro {
+export interface Objetivo {
   id: string;
   nombre: string;
   descripcion: string;
-  emoji: string;
+  icon: IconName;
   conseguido: boolean;
   /** 0..1 hacia conseguirlo. */
   progreso: number;
+  valor: number;
+  meta: number;
 }
 
-const DEF_LOGROS: { id: string; nombre: string; descripcion: string; emoji: string; valor: (t: TotalesJuego, racha: number) => number; meta: number }[] = [
-  { id: "primer-contacto", nombre: "Rompehielos", descripcion: "Marca tu primer contacto en un hito", emoji: "🧊", valor: (t) => t.contactados, meta: 1 },
-  { id: "diez-dia", nombre: "Día de fuego", descripcion: "10 contactos en un mismo día", emoji: "🔥", valor: (t) => t.max_contactos_dia, meta: 10 },
-  { id: "cincuenta", nombre: "Conector", descripcion: "50 contactos marcados en hitos", emoji: "🔗", valor: (t) => t.contactados, meta: 50 },
-  { id: "hito-completo", nombre: "Pleno", descripcion: "Completa un hito al 100 % (mín. 3 invitados)", emoji: "🏁", valor: (t) => t.hitos_completados, meta: 1 },
-  { id: "anfitrion", nombre: "Anfitrión", descripcion: "Invita a 25 contactos a hitos", emoji: "🎟️", valor: (t) => t.incluidos, meta: 25 },
-  { id: "ritual-100", nombre: "Maestro del ritual", descripcion: "100 puntos en el ritual", emoji: "🃏", valor: (t) => t.puntos, meta: 100 },
-  { id: "rescatador", nombre: "Rescatador", descripcion: "Adopta 5 contactos de la bolsa común", emoji: "🛟", valor: (t) => t.adoptados, meta: 5 },
-  { id: "bono", nombre: "Premiado", descripcion: "Consigue tu primer bono", emoji: "🎁", valor: (t) => t.bonos, meta: 1 },
-  { id: "racha-7", nombre: "Constante", descripcion: "Racha de 7 días seguidos", emoji: "📆", valor: (_t, r) => r, meta: 7 },
+const DEF_OBJETIVOS: { id: string; nombre: string; descripcion: string; icon: IconName; valor: (t: TotalesActividad, racha: number) => number; meta: number }[] = [
+  { id: "primer-contacto", nombre: "Primer contacto", descripcion: "Marca tu primer contacto en un hito", icon: "check", valor: (t) => t.contactados, meta: 1 },
+  { id: "diez-dia", nombre: "10 en un día", descripcion: "10 contactos en un mismo día", icon: "fire", valor: (t) => t.max_contactos_dia, meta: 10 },
+  { id: "cincuenta", nombre: "50 contactos", descripcion: "50 contactos marcados en hitos", icon: "users", valor: (t) => t.contactados, meta: 50 },
+  { id: "hito-completo", nombre: "Hito completado", descripcion: "Contacta a todos tus invitados de un hito (mín. 3)", icon: "flag", valor: (t) => t.hitos_completados, meta: 1 },
+  { id: "anfitrion", nombre: "25 invitados", descripcion: "Invita a 25 contactos a hitos", icon: "mail", valor: (t) => t.incluidos, meta: 25 },
+  { id: "ritual-100", nombre: "100 clasificados", descripcion: "100 puntos en el ritual", icon: "cards", valor: (t) => t.puntos, meta: 100 },
+  { id: "rescatador", nombre: "5 de la bolsa", descripcion: "Adopta 5 contactos de la bolsa común", icon: "inbox", valor: (t) => t.adoptados, meta: 5 },
+  { id: "bono", nombre: "Primer bono", descripcion: "Consigue tu primer bono", icon: "star", valor: (t) => t.bonos, meta: 1 },
+  { id: "racha-7", nombre: "Racha de 7 días", descripcion: "7 días seguidos con actividad", icon: "calendar", valor: (_t, r) => r, meta: 7 },
 ];
 
-export function logrosDe(t: TotalesJuego, mejorRacha: number): Logro[] {
-  return DEF_LOGROS.map((d) => {
+export function objetivosDe(t: TotalesActividad, mejorRacha: number): Objetivo[] {
+  return DEF_OBJETIVOS.map((d) => {
     const v = d.valor(t, mejorRacha);
     return {
       id: d.id,
       nombre: d.nombre,
       descripcion: d.descripcion,
-      emoji: d.emoji,
+      icon: d.icon,
       conseguido: v >= d.meta,
       progreso: Math.max(0, Math.min(1, v / d.meta)),
+      valor: Math.min(v, d.meta),
+      meta: d.meta,
     };
   });
-}
-
-export function xpDe(t: Pick<TotalesJuego, "puntos" | "contactados">): number {
-  return t.puntos + t.contactados;
 }
 
 export const TRAMOS_ANTIGUEDAD = ["< 3 meses", "3-6 meses", "6-12 meses", "> 12 meses", "Sin reunión"] as const;

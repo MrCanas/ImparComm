@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { NAV_ITEMS, isActive } from "@/components/layout/nav";
 import type { ShellUser } from "@/components/layout/types";
-import { nivelDe } from "@/modules/crm/gamificacion";
+import { Icon } from "@/components/ui/Icon";
 
 export function initials(name: string, email: string): string {
   const parts = (name || email).trim().split(/\s+/).filter(Boolean);
@@ -21,7 +21,7 @@ export function initials(name: string, email: string): string {
  * una segunda fila de navegación horizontal con subrayado dorado.
  * En móvil la navegación vive en la barra inferior (BottomNav).
  */
-export function AppHeader({ user, pendientes, xp }: { user: ShellUser; pendientes: number; xp: number }) {
+export function AppHeader({ user, pendientes, racha }: { user: ShellUser; pendientes: number; racha: number }) {
   const pathname = usePathname();
   const items = NAV_ITEMS.filter(
     (i) => !i.requires || (i.requires === "admin" ? user.isAdmin : user.canSeeBolsa),
@@ -44,7 +44,7 @@ export function AppHeader({ user, pendientes, xp }: { user: ShellUser; pendiente
         </Link>
 
         <div className="flex items-center gap-1">
-          <NivelChip xp={xp} />
+          <RachaChip racha={racha} />
           <UserMenu user={user} />
         </div>
       </div>
@@ -80,30 +80,31 @@ export function AppHeader({ user, pendientes, xp }: { user: ShellUser; pendiente
   );
 }
 
-/** Insignia de nivel: da un pequeño salto cuando sube la XP. */
-function NivelChip({ xp }: { xp: number }) {
-  const { actual, progreso } = nivelDe(xp);
+/** Racha de días con actividad: da un pequeño salto cuando crece. */
+function RachaChip({ racha }: { racha: number }) {
   const ref = useRef<HTMLAnchorElement>(null);
-  const previo = useRef(xp);
+  const previo = useRef(racha);
   useEffect(() => {
-    if (xp > previo.current && ref.current) {
+    if (racha > previo.current && ref.current) {
       ref.current.classList.remove("animate-pop");
       void ref.current.offsetWidth;
       ref.current.classList.add("animate-pop");
     }
-    previo.current = xp;
-  }, [xp]);
+    previo.current = racha;
+  }, [racha]);
   return (
     <Link
       ref={ref}
       href="/analiticas"
-      className="flex h-9 items-center gap-1.5 rounded-full bg-white/10 pl-1.5 pr-3 text-xs font-semibold text-white transition hover:bg-white/20"
-      aria-label={`Nivel ${actual.nombre}, ${xp} XP`}
+      title="Días seguidos con actividad"
+      aria-label={`Racha de ${racha} ${racha === 1 ? "día" : "días"}`}
+      className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${
+        racha > 0 ? "bg-icam-gold/20 text-icam-gold hover:bg-icam-gold/30" : "bg-white/10 text-white/60 hover:bg-white/20"
+      }`}
     >
-      <span className="relative flex h-6 w-6 items-center justify-center rounded-full" style={{ background: `conic-gradient(#B89660 ${progreso * 360}deg, rgb(255 255 255 / 0.15) 0)` }}>
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-icam-900 text-[11px]">{actual.emoji}</span>
-      </span>
-      <span className="tabular-nums">{xp.toLocaleString("es-ES")} XP</span>
+      <Icon name="fire" className={`h-4 w-4 ${racha > 0 ? "animate-flame" : ""}`} />
+      <span className="tabular-nums">{racha}</span>
+      <span className="hidden font-normal sm:inline">{racha === 1 ? "día" : "días"}</span>
     </Link>
   );
 }

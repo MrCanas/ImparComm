@@ -2,10 +2,11 @@
 
 import confetti from "canvas-confetti";
 
-/** Navy y dorado de Impar, más un par de acentos para que luzca. */
+/** Navy y dorado de Impar. */
 const COLORES = ["#1E2A56", "#B89660", "#D9C29A", "#2B3668", "#FFFFFF"];
 
-export type Celebracion = "contacto" | "hito" | "bono" | "logro" | "nivel";
+/** Solo para momentos que lo merecen: no se lanza en cada acción. */
+export type Celebracion = "hito" | "bono";
 
 function reducido(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -22,28 +23,15 @@ export function celebrar(tipo: Celebracion, origen?: { x: number; y: number }) {
     : { x: 0.5, y: 0.55 };
   const base = { colors: COLORES, origin: o, disableForReducedMotion: true, zIndex: 80 };
 
-  switch (tipo) {
-    case "contacto":
-      confetti({ ...base, particleCount: 40, spread: 55, startVelocity: 28, scalar: 0.8, ticks: 120 });
-      break;
-    case "logro":
-      confetti({ ...base, particleCount: 80, spread: 90, startVelocity: 35, shapes: ["star"], scalar: 1.1 });
-      break;
-    case "hito":
-    case "bono":
-    case "nivel": {
-      // Dos cañones laterales durante ~1,2 s.
-      const fin = Date.now() + 1200;
-      const frame = () => {
-        confetti({ ...base, particleCount: 6, angle: 60, spread: 60, origin: { x: 0, y: 0.7 } });
-        confetti({ ...base, particleCount: 6, angle: 120, spread: 60, origin: { x: 1, y: 0.7 } });
-        if (Date.now() < fin) requestAnimationFrame(frame);
-      };
-      frame();
-      confetti({ ...base, particleCount: 120, spread: 100, startVelocity: 45, origin: { x: 0.5, y: 0.5 } });
-      break;
-    }
-  }
+  // Un único disparo, corto y contenido.
+  confetti({
+    ...base,
+    particleCount: tipo === "hito" ? 90 : 70,
+    spread: 75,
+    startVelocity: 32,
+    scalar: 0.8,
+    ticks: 140,
+  });
 }
 
 /** Centro de un elemento, para usarlo como origen del confeti o del «+1». */

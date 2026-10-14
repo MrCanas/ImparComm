@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { celebrar, centroDe, type Celebracion } from "@/components/fx/confetti";
+import { Icon, type IconName } from "@/components/ui/Icon";
 
 interface Flotante {
   id: number;
@@ -14,17 +15,17 @@ interface Flotante {
 
 interface Aviso {
   id: number;
-  emoji: string;
+  icon: IconName;
   titulo: string;
   detalle?: string;
 }
 
 interface FxApi {
-  /** «+1 ⭐» que sube y se desvanece desde el elemento (o el centro). */
+  /** «+1» que sube y se desvanece desde el elemento (o el centro). */
   flotar: (texto: string, desde?: Element | null) => void;
   /** Confeti; con `desde`, sale del elemento. */
   celebrar: (tipo: Celebracion, desde?: Element | null) => void;
-  /** Toast de logro / nivel en la parte superior. */
+  /** Aviso breve en la parte superior (objetivo cumplido, hito completado…). */
   avisar: (aviso: Omit<Aviso, "id">) => void;
 }
 
@@ -66,7 +67,7 @@ export function FxProvider({ children }: { children: ReactNode }) {
       {flotantes.map((f) => (
         <span
           key={f.id}
-          className="fx-float-up rounded-full bg-icam-gold px-2.5 py-1 text-sm font-bold text-white shadow-lg"
+          className="fx-float-up rounded-full bg-icam-900 px-2.5 py-1 text-xs font-semibold text-white shadow-lg"
           style={{ left: f.x, top: f.y - 10 }}
           aria-hidden="true"
         >
@@ -83,9 +84,11 @@ export function FxProvider({ children }: { children: ReactNode }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -16, scale: 0.95 }}
               transition={{ type: "spring", stiffness: 420, damping: 28 }}
-              className="flex max-w-sm items-center gap-3 rounded-xl border border-icam-gold/40 bg-icam-900 px-4 py-3 text-white shadow-2xl"
+              className="flex max-w-sm items-center gap-3 rounded-lg border border-white/10 bg-icam-900 px-4 py-3 text-white shadow-xl"
             >
-              <span className="text-2xl animate-wiggle" aria-hidden="true">{a.emoji}</span>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-icam-gold/20 text-icam-gold">
+                <Icon name={a.icon} className="h-4 w-4" />
+              </span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">{a.titulo}</span>
                 {a.detalle ? <span className="block text-xs text-white/70">{a.detalle}</span> : null}

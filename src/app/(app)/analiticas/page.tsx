@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { getCrm } from "@/lib/db/server";
 import { hoyMadrid } from "@/lib/format";
 import { desdeDias, getMiPosicion, getStatsEmpleado, getStatsEquipo } from "@/modules/crm/data";
-import { logrosDe, rachaDe, xpDe } from "@/modules/crm/gamificacion";
+import { objetivosDe, rachaDe } from "@/modules/crm/gamificacion";
 import { Analiticas, RANGOS } from "@/modules/crm/ui/AnaliticasUI";
 
 export const metadata = { title: "Analíticas" };
@@ -28,7 +28,7 @@ export default async function AnaliticasPage({
 
   return (
     <>
-      <PageHeader title="Analíticas" subtitle={vista === "equipo" ? "Cómo juega el equipo" : "Tu partida: nivel, racha, logros y actividad"} />
+      <PageHeader title="Analíticas" subtitle={vista === "equipo" ? "Actividad del equipo" : "Tu actividad, racha y objetivos"} />
       <Analiticas
         rango={rango}
         vista={vista}
@@ -37,13 +37,12 @@ export default async function AnaliticasPage({
         equipo={equipo}
         hoy={hoy}
         userId={user.id}
-        juego={{
-          xp: xpDe(stats.totales),
+        resumen={{
           racha: racha.actual,
           mejorRacha: racha.mejor,
           posicion: posicion.posicion,
           totalEquipo: posicion.total,
-          logros: logrosDe(stats.totales, racha.mejor),
+          objetivos: objetivosDe(stats.totales, racha.mejor),
         }}
       />
     </>

@@ -124,7 +124,7 @@ export default async function ContactoPage({ params }: { params: Promise<{ id: s
                         }`}
                         title={hecho ? `Contactado ${fmtFecha(h.fecha_contacto)}` : "Pendiente de contactar"}
                       >
-                        <span aria-hidden="true">{hecho ? "🏅" : "⏳"}</span>
+                        {hecho ? <Icon name="check" className="h-4 w-4" strokeWidth={2.4} /> : <span className="h-2 w-2 rounded-full bg-icam-gold" aria-hidden="true" />}
                         <span className="max-w-[12rem] truncate">{h.hito.nombre}</span>
                       </Link>
                     </Reveal>
