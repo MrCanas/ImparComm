@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { Reveal } from "@/components/fx/Reveal";
 import { Badge, ESTADO_RELACION } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
 import { SectionTitle } from "@/components/ui/PageHeader";
 import { card } from "@/components/ui/styles";
 import { getCrm } from "@/lib/db/server";
-import { fmtFecha } from "@/lib/format";
+import { fmtFecha, fmtFechaCorta } from "@/lib/format";
 import {
   getMiRelacion,
   listEtiquetas,
+  listEventosDePersona,
   listHitosDePersona,
   listReunionesDePersona,
 } from "@/modules/crm/data";
@@ -22,10 +24,11 @@ export default async function ContactoPage({ params }: { params: Promise<{ id: s
   const relacion = await getMiRelacion(db, user.id, id);
   if (!relacion) notFound();
 
-  const [etiquetas, hitos, reuniones] = await Promise.all([
+  const [etiquetas, hitos, reuniones, eventos] = await Promise.all([
     listEtiquetas(db),
     listHitosDePersona(db, id),
     listReunionesDePersona(db, id),
+    listEventosDePersona(db, id),
   ]);
   const p = relacion.persona;
   const estado = ESTADO_RELACION[relacion.estado];
@@ -109,19 +112,46 @@ export default async function ContactoPage({ params }: { params: Promise<{ id: s
             {hitos.length === 0 ? (
               <p className="text-sm text-text-muted">No está en ningún hito.</p>
             ) : (
-              <ul className="divide-y divide-subtle/60">
-                {hitos.map((h) => (
-                  <li key={h.hito.id}>
-                    <Link href={`/hitos/${h.hito.id}`} className="flex min-h-11 items-center justify-between gap-2 py-2 hover:underline">
-                      <span className="truncate text-sm font-medium">{h.hito.nombre}</span>
-                      <Badge tone={h.estado === "contactado" ? "green" : "gold"}>
-                        {h.estado === "contactado" ? "Contactado" : "Pte"}
-                      </Badge>
-                    </Link>
-                  </li>
-                ))}
+              <ul className="flex flex-wrap gap-2">
+                {hitos.map((h, i) => {
+                  const hecho = h.estado === "contactado";
+                  return (
+                    <Reveal as="li" key={h.hito.id} index={i}>
+                      <Link
+                        href={`/hitos/${h.hito.id}`}
+                        className={`fx-lift flex min-h-11 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium ${
+                          hecho ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-icam-gold/40 bg-icam-gold/10 text-[#7d6235]"
+                        }`}
+                        title={hecho ? `Contactado ${fmtFecha(h.fecha_contacto)}` : "Pendiente de contactar"}
+                      >
+                        <span aria-hidden="true">{hecho ? "🏅" : "⏳"}</span>
+                        <span className="max-w-[12rem] truncate">{h.hito.nombre}</span>
+                      </Link>
+                    </Reveal>
+                  );
+                })}
               </ul>
             )}
+            {eventos.length > 0 ? (
+              <ol className="mt-4 space-y-0 border-l-2 border-subtle pl-4">
+                {eventos.slice(0, 8).map((e, i) => (
+                  <Reveal as="li" key={e.id} index={i} className="relative pb-3 last:pb-0">
+                    <span
+                      className={`absolute -left-[23px] top-1 h-3 w-3 rounded-full ring-4 ring-card ${
+                        e.accion === "contactar" ? "bg-emerald-500" : e.accion === "incluir" ? "bg-icam-gold" : "bg-subtle"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <p className="text-sm text-text-body">
+                      {{ incluir: "Invitado a", contactar: "Contactado en", volver_pte: "Vuelve a pendiente en", quitar: "Quitado de" }[e.accion]}{" "}
+                      <span className="font-medium">{e.hito.nombre}</span>
+                      {e.canal ? <span className="text-text-muted"> · {e.canal}</span> : null}
+                    </p>
+                    <p className="text-xs text-text-muted">{fmtFechaCorta(e.created_at)}</p>
+                  </Reveal>
+                ))}
+              </ol>
+            ) : null}
           </section>
 
           <section className={`${card} p-4`}>

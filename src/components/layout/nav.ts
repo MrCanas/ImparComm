@@ -15,6 +15,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/contactos", label: "Contactos", icon: "users" },
   { href: "/ritual", label: "Ritual", icon: "cards" },
   { href: "/hitos", label: "Hitos", icon: "flag" },
+  { href: "/analiticas", label: "Analíticas", icon: "chart", mobileInMore: true },
   { href: "/bolsa", label: "Bolsa común", icon: "inbox", requires: "bolsa", mobileInMore: true },
   { href: "/admin", label: "Administración", icon: "shield", requires: "admin", mobileInMore: true },
 ];

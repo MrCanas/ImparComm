@@ -4,9 +4,28 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
 import { getCrm } from "@/lib/db/server";
-import { fmtFecha } from "@/lib/format";
-import { getHito, listEtiquetas, listHitoPersonas, listMisRelaciones, nombresEmpleados } from "@/modules/crm/data";
-import { HitoDetalle } from "@/modules/crm/ui/HitoUI";
+import { fmtFecha, hoyMadrid } from "@/lib/format";
+import { getHito, listEtiquetas, listEventosHito, listHitoPersonas, listMisRelaciones, nombresEmpleados, type HitoEvento } from "@/modules/crm/data";
+import { HitoBoard } from "@/modules/crm/ui/HitoBoard";
+
+/** Contactos por día desde el primer movimiento (máx. 60 días), para la mini gráfica. */
+function serieContactos(eventos: HitoEvento[]) {
+  const contactos = eventos.filter((e) => e.accion === "contactar");
+  if (contactos.length === 0) return [];
+  const hoy = hoyMadrid();
+  const porDia = new Map<string, number>();
+  for (const e of contactos) porDia.set(e.created_at.slice(0, 10), (porDia.get(e.created_at.slice(0, 10)) ?? 0) + 1);
+  const inicio = new Date(`${eventos[0].created_at.slice(0, 10)}T12:00:00Z`);
+  const limite = new Date(`${hoy}T12:00:00Z`);
+  limite.setUTCDate(limite.getUTCDate() - 59);
+  const d = inicio < limite ? limite : inicio;
+  const serie: { dia: string; contactados: number }[] = [];
+  for (; d.toISOString().slice(0, 10) <= hoy; d.setUTCDate(d.getUTCDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10);
+    serie.push({ dia: iso, contactados: porDia.get(iso) ?? 0 });
+  }
+  return serie;
+}
 
 export default async function HitoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,10 +33,11 @@ export default async function HitoPage({ params }: { params: Promise<{ id: strin
   const hito = await getHito(db, id);
   if (!hito) notFound();
 
-  const [miembros, relaciones, etiquetas] = await Promise.all([
+  const [miembros, relaciones, etiquetas, eventos] = await Promise.all([
     listHitoPersonas(db, id),
     listMisRelaciones(db, user.id),
     listEtiquetas(db),
+    listEventosHito(db, id),
   ]);
   const nombres = await nombresEmpleados(db, [
     hito.abierto_por,
@@ -60,8 +80,9 @@ export default async function HitoPage({ params }: { params: Promise<{ id: strin
         ) : null}
       </div>
 
-      <HitoDetalle
+      <HitoBoard
         hitoId={hito.id}
+        serie={serieContactos(eventos)}
         miembros={miembros.map((m) => ({
           ...m,
           contactadoPorNombre: m.contactado_por
