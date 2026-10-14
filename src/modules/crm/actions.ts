@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 
 import { resolveAuthUserIdByEmail } from "@/lib/auth/resolve-auth-user";
 import { getCrm } from "@/lib/db/server";
+import { datosResumen, plantillaResumen } from "@/lib/email/resumen";
+import { sendGraphMail } from "@/lib/email/mailer";
+import { flags } from "@/lib/flags";
+import { sincronizarEmpleado } from "@/lib/graph/calendario";
+import { completarFirmas } from "@/lib/graph/firmas";
 import { registrarContactoEnZoho } from "@/lib/zoho/contactos";
 import type { TipoEtiqueta } from "@/modules/crm/types";
 
@@ -216,6 +221,25 @@ export async function clasificar(
   }
 }
 
+/** Tarjeta «Evento»: archiva de golpe a los asistentes nuevos de una reunión grande (+1 punto cada uno). */
+export async function archivarVarias(relacionIds: string[]): Promise<ActionResult<{ archivadas: number }>> {
+  try {
+    if (relacionIds.length === 0) return { ok: true, data: { archivadas: 0 } };
+    const { db } = await getCrm();
+    const { data, error } = await db
+      .from("relaciones")
+      .update({ estado: "archivada" })
+      .in("id", relacionIds)
+      .eq("estado", "nueva")
+      .select("id");
+    if (error) throw new Error(error.message);
+    revalidatePath("/", "layout");
+    return { ok: true, data: { archivadas: data?.length ?? 0 } };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 /** Deshace la última clasificación/archivo del ritual (−1 punto vía trigger). */
 export async function deshacer(
   relacionId: string,
@@ -318,15 +342,33 @@ export async function quitarDeHito(hitoId: string, personaId: string): Promise<A
 export async function marcarContactado(hitoId: string, personaId: string, canal: string): Promise<ActionResult> {
   try {
     const { db, user } = await getCrm();
-    const { error } = await db
+    const { data, error } = await db
       .from("hito_persona")
       .update({ estado: "contactado", canal: canal || null, contactado_por: user.id, fecha_contacto: new Date().toISOString() })
       .eq("hito_id", hitoId)
-      .eq("persona_id", personaId);
+      .eq("persona_id", personaId)
+      .select("persona_id");
     if (error) throw new Error(error.message);
-    await registrarContactoEnZoho({ hitoId, personaId, empleadoId: user.id });
+    if (!data?.length) return { ok: false, error: "No puedes modificar este invitado" };
+    // Zoho no bloquea: si falla, queda anotado en hito_persona.zoho_estado.
+    await registrarContactoEnZoho({ hitoId, personaId, empleadoEmail: user.email });
     revalidatePath(`/hitos/${hitoId}`);
     return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Reintenta el paso a Zoho de un contacto ya marcado como Contactado. */
+export async function reintentarZoho(hitoId: string, personaId: string): Promise<ActionResult> {
+  try {
+    const { db, user } = await getCrm();
+    // Validación por RLS: solo si el empleado ve esa fila del hito.
+    const { data } = await db.from("hito_persona").select("estado").eq("hito_id", hitoId).eq("persona_id", personaId).maybeSingle();
+    if (!data || data.estado !== "contactado") return { ok: false, error: "No está marcado como Contactado" };
+    const res = await registrarContactoEnZoho({ hitoId, personaId, empleadoEmail: user.email });
+    revalidatePath(`/hitos/${hitoId}`);
+    return res.estado === "error" ? { ok: false, error: res.error ?? "Error de Zoho" } : { ok: true };
   } catch (err) {
     return fail(err);
   }
@@ -458,6 +500,66 @@ export async function quitarPermiso(userId: string): Promise<ActionResult> {
     if (error) throw new Error(error.message);
     revalidatePath("/admin");
     return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+// ─── Integraciones (administración) ─────────────────────────────────────────
+
+/** Envía el resumen semanal SOLO al propio administrador, para ver cómo queda. */
+export async function enviarmeResumenPrueba(): Promise<ActionResult<{ enviado: boolean }>> {
+  try {
+    const { user } = await getCrm();
+    if (!user.isAdmin) return { ok: false, error: "No autorizado" };
+    const datos = await datosResumen({ id: user.id, email: user.email, nombre: user.name });
+    // Aunque no haya nada pendiente, la prueba se envía para poder ver el formato.
+    const { subject, html } = plantillaResumen(datos);
+    const asunto = datos.pendientes === 0 && datos.vencidos.length === 0 ? "ImparComm · sin pendientes" : subject;
+    await sendGraphMail({ to: user.email, subject: `[Prueba] ${asunto}`, html });
+    return { ok: true, data: { enviado: true } };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Sincroniza ahora el calendario del propio administrador (últimos 30 días + 14). */
+export async function sincronizarMiCalendario(): Promise<
+  ActionResult<{ nuevas: number; reuniones: number; firmas: number | null }>
+> {
+  try {
+    const { user } = await getCrm();
+    if (!user.isAdmin) return { ok: false, error: "No autorizado" };
+    if (!flags.calendario) return { ok: false, error: "CALENDARIO_ENABLED no está activo" };
+    const ahora = Date.now();
+    const empleado = { id: user.id, email: user.email, nombre: user.name };
+    const r = await sincronizarEmpleado(
+      empleado,
+      new Date(ahora - 30 * 86_400_000),
+      new Date(ahora + 14 * 86_400_000),
+    );
+    const firmas = flags.firmas ? (await completarFirmas(empleado)).actualizadas : null;
+    revalidatePath("/", "layout");
+    return { ok: true, data: { nuevas: r.relacionesNuevas, reuniones: r.conExternos, firmas } };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function guardarDominiosInternos(texto: string): Promise<ActionResult<{ purgadas: number }>> {
+  try {
+    const dominios = [...new Set(texto.split(/[\s,;]+/).map((d) => d.trim().toLowerCase().replace(/^@/, "")).filter(Boolean))];
+    if (dominios.length === 0) return { ok: false, error: "Indica al menos un dominio" };
+    if (dominios.some((d) => !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d))) return { ok: false, error: "Algún dominio no es válido" };
+    const { db, user } = await getCrm();
+    if (!user.isAdmin) return { ok: false, error: "No autorizado" };
+    const { error } = await db.from("config").upsert({ clave: "dominios_internos", valor: dominios, updated_at: new Date().toISOString() });
+    if (error) throw new Error(error.message);
+    // Lo capturado antes de declarar internos esos dominios deja de ser un contacto.
+    const { data: purgadas, error: ep } = await db.rpc("purgar_dominios_internos");
+    if (ep) throw new Error(ep.message);
+    revalidatePath("/", "layout");
+    return { ok: true, data: { purgadas: (purgadas as number) ?? 0 } };
   } catch (err) {
     return fail(err);
   }

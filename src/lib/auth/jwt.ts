@@ -8,10 +8,20 @@ export const SESSION_COOKIE_NAME = "impar-comm-auth";
 /** Vida de la sesión: 7 días, renovados mientras el usuario siga usando el portal. */
 export const SESSION_MAX_AGE_S = 60 * 60 * 24 * 7;
 
+const IS_PROD = process.env.NODE_ENV === "production";
+
+/**
+ * En producción la app también vive como pestaña de Teams (iframe de otro
+ * sitio): la cookie necesita SameSite=None + Secure, y Partitioned (CHIPS) para
+ * que los navegadores que bloquean cookies de terceros la acepten dentro de
+ * Teams. Las Server Actions siguen protegidas por la comprobación de Origin de
+ * Next. En local (http) se queda en Lax.
+ */
 export const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  secure: IS_PROD,
+  sameSite: IS_PROD ? ("none" as const) : ("lax" as const),
+  partitioned: IS_PROD,
   maxAge: SESSION_MAX_AGE_S,
   path: "/",
 };

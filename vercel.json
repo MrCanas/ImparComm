@@ -1,7 +1,23 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "regions": ["arn1"],
+  "regions": [
+    "arn1"
+  ],
   "installCommand": "npm ci --include=optional",
-  "buildCommand": "npm run build"
+  "buildCommand": "npm run build",
+  "crons": [
+    {
+      "path": "/api/cron/calendario",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/resumen-semanal",
+      "schedule": "0 7 * * 5"
+    },
+    {
+      "path": "/api/cron/resumen-semanal",
+      "schedule": "0 8 * * 5"
+    }
+  ]
 }

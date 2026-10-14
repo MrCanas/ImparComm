@@ -15,6 +15,7 @@ import {
   incluirEnHito,
   marcarContactado,
   quitarDeHito,
+  reintentarZoho,
   volverAPendiente,
 } from "@/modules/crm/actions";
 import { CANALES, TIPOS_HITO, type Etiqueta, type HitoPersona, type Persona } from "@/modules/crm/types";
@@ -271,7 +272,16 @@ function MiembroRow({
           <p className="text-xs text-text-muted">
             Contactado por {m.contactadoPorNombre}, {fmtFecha(m.fecha_contacto)}
             {m.canal ? ` · ${m.canal}` : ""}
+            {m.zoho_estado === "ok" ? " · En Zoho" : ""}
           </p>
+          {m.zoho_estado === "error" ? (
+            <span className="flex w-full items-center justify-between gap-2 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">
+              <span className="truncate" title={m.zoho_error ?? undefined}>No se pudo pasar a Zoho</span>
+              <button type="button" className="min-h-9 shrink-0 font-medium underline" disabled={pending} onClick={() => run(() => reintentarZoho(hitoId, m.persona_id))}>
+                Reintentar
+              </button>
+            </span>
+          ) : null}
           <button type="button" className="min-h-9 text-xs font-medium text-text-muted underline" disabled={pending} onClick={() => run(() => volverAPendiente(hitoId, m.persona_id))}>
             Volver a Pte
           </button>
