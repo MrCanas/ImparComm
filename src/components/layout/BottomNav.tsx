@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "motion/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -37,7 +38,7 @@ export function BottomNav({ pendientes }: { pendientes: number }) {
                 }`}
               >
                 {active ? (
-                  <span className="absolute top-0 h-[3px] w-8 rounded-b bg-icam-gold" aria-hidden="true" />
+                  <motion.span layoutId="tab-activa" className="absolute top-0 h-[3px] w-8 rounded-b bg-icam-gold" aria-hidden="true" transition={{ type: "spring", stiffness: 500, damping: 35 }} />
                 ) : null}
                 <span className="relative">
                   <Icon name={tab.icon} className="h-6 w-6" strokeWidth={active ? 2.1 : 1.7} />

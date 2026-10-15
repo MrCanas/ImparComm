@@ -1,6 +1,9 @@
+import { AnimatedNumber } from "@/components/fx/AnimatedNumber";
+
 interface KPICardProps {
   title: string;
-  value: string;
+  /** Un número se anima contando hasta su valor. */
+  value: string | number;
   subtitle: string;
   highlight?: boolean;
   /**
@@ -27,18 +30,18 @@ export function KPICard({
 }: KPICardProps) {
   const contenido = (
     <>
-      <div className={`h-[3px] ${highlight ? "bg-icam-gold" : "bg-icam-900"}`} />
+      <div className={`h-[3px] ${highlight ? "bg-gradient-to-r from-icam-gold to-[#D9C29A]" : "bg-icam-900"}`} />
       <div className="p-3 sm:p-4 min-w-0">
         <p className="text-xs font-medium text-text-muted uppercase tracking-wider">{title}</p>
         <p className="mt-2 text-xl sm:text-2xl lg:text-3xl font-semibold text-text-primary break-words leading-tight hyphens-auto">
-          {value}
+          {typeof value === "number" ? <AnimatedNumber value={value} /> : value}
         </p>
         <p className="mt-1 text-sm text-text-muted leading-snug">{subtitle}</p>
       </div>
     </>
   );
 
-  const clases = "bg-card rounded-lg border border-subtle/50 shadow-sm overflow-hidden min-w-0";
+  const clases = "fx-lift bg-card rounded-lg border border-subtle/50 shadow-sm overflow-hidden min-w-0";
 
   if (!onClick) return <article className={clases}>{contenido}</article>;
 

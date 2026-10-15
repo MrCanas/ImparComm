@@ -8,7 +8,6 @@ import { EmptyState, SectionTitle } from "@/components/ui/PageHeader";
 import { btn, card, input, label } from "@/components/ui/styles";
 import { fmtFecha } from "@/lib/format";
 import {
-  adoptarRelacion,
   cambiarPlazo,
   convertirEnGeneral,
   enviarmeResumenPrueba,
@@ -361,46 +360,6 @@ export function PermisosAdmin({ filas }: { filas: { user_id: string; nombre: str
         </ul>
       ) : null}
     </div>
-  );
-}
-
-// ─── Bolsa común ─────────────────────────────────────────────────────────────
-
-export interface BolsaItem {
-  relacion_id: string;
-  persona_id: string;
-  persona_nombre: string;
-  persona_email: string | null;
-  empresa: string | null;
-  estado: string;
-  ultima_reunion: string | null;
-  empleado_nombre: string;
-}
-
-export function BolsaList({ items }: { items: BolsaItem[] }) {
-  const [run, pending, error] = useRun();
-  if (items.length === 0) {
-    return <EmptyState title="La bolsa común está vacía">Cuando un empleado cause baja, sus contactos aparecerán aquí.</EmptyState>;
-  }
-  return (
-    <>
-      <ErrorMsg error={error} />
-      <ul className="space-y-2">
-        {items.map((i) => (
-          <li key={i.relacion_id} className={`${card} flex flex-wrap items-center gap-3 p-3`}>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium text-text-primary">{i.persona_nombre}</span>
-              <span className="block truncate text-xs text-text-muted">
-                {[i.empresa, i.persona_email].filter(Boolean).join(" · ")} · de {i.empleado_nombre}
-              </span>
-            </span>
-            <button type="button" className={`${btn.primary} min-h-10`} disabled={pending} onClick={() => run(() => adoptarRelacion(i.relacion_id))}>
-              Adoptar
-            </button>
-          </li>
-        ))}
-      </ul>
-    </>
   );
 }
 

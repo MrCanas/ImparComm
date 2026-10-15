@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { NAV_ITEMS, isActive } from "@/components/layout/nav";
 import type { ShellUser } from "@/components/layout/types";
+import { Icon } from "@/components/ui/Icon";
 
 export function initials(name: string, email: string): string {
   const parts = (name || email).trim().split(/\s+/).filter(Boolean);
@@ -20,7 +21,7 @@ export function initials(name: string, email: string): string {
  * una segunda fila de navegación horizontal con subrayado dorado.
  * En móvil la navegación vive en la barra inferior (BottomNav).
  */
-export function AppHeader({ user, pendientes }: { user: ShellUser; pendientes: number }) {
+export function AppHeader({ user, pendientes, racha }: { user: ShellUser; pendientes: number; racha: number }) {
   const pathname = usePathname();
   const items = NAV_ITEMS.filter(
     (i) => !i.requires || (i.requires === "admin" ? user.isAdmin : user.canSeeBolsa),
@@ -42,7 +43,10 @@ export function AppHeader({ user, pendientes }: { user: ShellUser; pendientes: n
           <span className="text-sm font-semibold tracking-wide text-icam-gold">ImparComm</span>
         </Link>
 
-        <UserMenu user={user} />
+        <div className="flex items-center gap-1">
+          <RachaChip racha={racha} />
+          <UserMenu user={user} />
+        </div>
       </div>
 
       <nav
@@ -73,6 +77,35 @@ export function AppHeader({ user, pendientes }: { user: ShellUser; pendientes: n
         })}
       </nav>
     </header>
+  );
+}
+
+/** Racha de días con actividad: da un pequeño salto cuando crece. */
+function RachaChip({ racha }: { racha: number }) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const previo = useRef(racha);
+  useEffect(() => {
+    if (racha > previo.current && ref.current) {
+      ref.current.classList.remove("animate-pop");
+      void ref.current.offsetWidth;
+      ref.current.classList.add("animate-pop");
+    }
+    previo.current = racha;
+  }, [racha]);
+  return (
+    <Link
+      ref={ref}
+      href="/analiticas"
+      title="Días seguidos con actividad"
+      aria-label={`Racha de ${racha} ${racha === 1 ? "día" : "días"}`}
+      className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${
+        racha > 0 ? "bg-icam-gold/20 text-icam-gold hover:bg-icam-gold/30" : "bg-white/10 text-white/60 hover:bg-white/20"
+      }`}
+    >
+      <Icon name="fire" className={`h-4 w-4 ${racha > 0 ? "animate-flame" : ""}`} />
+      <span className="tabular-nums">{racha}</span>
+      <span className="hidden font-normal sm:inline">{racha === 1 ? "día" : "días"}</span>
+    </Link>
   );
 }
 

@@ -39,7 +39,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (tab === "equipo") {
     const { data, error } = await db.rpc("resumen_empleados");
     if (error) throw new Error(`resumen_empleados: ${error.message}`);
-    contenido = <ResumenEquipo filas={(data ?? []) as ResumenEmpleado[]} />;
+    contenido = (
+      <>
+        <Link href="/analiticas?vista=equipo" className="mb-3 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-icam-900 underline lg:min-h-0">
+          Ver clasificación y gráficas del equipo en Analíticas →
+        </Link>
+        <ResumenEquipo filas={(data ?? []) as ResumenEmpleado[]} />
+      </>
+    );
   }
 
   if (tab === "etiquetas") {
