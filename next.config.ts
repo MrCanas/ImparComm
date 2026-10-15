@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
-  // Para poder publicarse como pestaña de Teams (iframe dentro de Teams).
+  // Para poder publicarse como pestaña de Teams y como tab de icam web dashboard (iframe).
   async headers() {
     return [
       {
@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "frame-ancestors 'self' https://teams.microsoft.com https://*.teams.microsoft.com https://*.office.com https://*.cloud.microsoft",
+              "frame-ancestors 'self' https://go.imparcapital.com https://teams.microsoft.com https://*.teams.microsoft.com https://*.office.com https://*.cloud.microsoft",
           },
         ],
       },
