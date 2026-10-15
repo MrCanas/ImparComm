@@ -15,7 +15,7 @@ La misma web se publica como pestaña personal de Teams (icono en la barra later
 
 ## Requisitos ya resueltos en la app
 
-- `Content-Security-Policy: frame-ancestors` permite a Teams incrustar la web (`next.config.ts`).
+- `Content-Security-Policy: frame-ancestors` permite a Teams y a icam web dashboard (`https://go.imparcapital.com`, tab Comm) incrustar la web (`next.config.ts`).
 - La cookie de sesión es `SameSite=None; Secure; Partitioned` en producción para funcionar dentro del iframe de Teams (`src/lib/auth/jwt.ts`).
 - El inicio de sesión dentro de Teams usa el mismo formulario; con el SSO de Entra (fase futura) se hará con el SDK de Teams.
 
