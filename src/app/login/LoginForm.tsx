@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function LoginForm() {
+export function LoginForm({ aviso }: { aviso?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -82,6 +82,7 @@ export function LoginForm() {
             {loading ? "Validando..." : "Acceder"}
           </button>
           {error ? <p className="text-sm text-red-600 text-center">{error}</p> : null}
+          {!error && aviso ? <p className="text-sm text-text-muted text-center">{aviso}</p> : null}
         </form>
       </div>
     </section>

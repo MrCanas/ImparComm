@@ -3,7 +3,8 @@ import { getCrm } from "@/lib/db/server";
 import { hoyMadrid } from "@/lib/format";
 import { desdeDias, getMiPosicion, getStatsEmpleado, getStatsEquipo } from "@/modules/crm/data";
 import { objetivosDe, rachaDe } from "@/modules/crm/gamificacion";
-import { Analiticas, RANGOS } from "@/modules/crm/ui/AnaliticasUI";
+import { RANGOS_ANALITICAS as RANGOS } from "@/modules/crm/types";
+import { Analiticas } from "@/modules/crm/ui/AnaliticasUI";
 
 export const metadata = { title: "Analíticas" };
 

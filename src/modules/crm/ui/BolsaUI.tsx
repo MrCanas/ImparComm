@@ -14,19 +14,10 @@ import { EmptyState, SectionTitle } from "@/components/ui/PageHeader";
 import { btn, card } from "@/components/ui/styles";
 import { fmtFecha } from "@/lib/format";
 import { adoptarRelacion } from "@/modules/crm/actions";
-import type { StatsBolsa } from "@/modules/crm/data";
+import type { BolsaItem, StatsBolsa } from "@/modules/crm/data";
 import { TRAMOS_ANTIGUEDAD, tramoAntiguedad } from "@/modules/crm/gamificacion";
 
-export interface BolsaItem {
-  relacion_id: string;
-  persona_id: string;
-  persona_nombre: string;
-  persona_email: string | null;
-  empresa: string | null;
-  estado: string;
-  ultima_reunion: string | null;
-  empleado_nombre: string;
-}
+export type { BolsaItem };
 
 const TONO_TRAMO: Record<string, string> = {
   "< 3 meses": "bg-emerald-50 text-emerald-700",

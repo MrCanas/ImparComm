@@ -46,9 +46,9 @@ function readAuthIdentity(userId: string): Promise<AuthIdentity | null> {
     async (): Promise<AuthIdentity | null> => {
       const admin = createServiceRoleClient();
       const { data, error } = await admin.auth.admin.getUserById(userId);
-      if (error || !data.user) {
-        throw new Error(`getUserById: ${error?.message ?? "usuario no encontrado"}`);
-      }
+      // Usuario borrado en Auth: sin identidad (sesión inválida). Otro error: temporal.
+      if (error?.status === 404 || (!error && !data.user)) return null;
+      if (error) throw new Error(`getUserById: ${error.message}`);
       const email = data.user.email?.trim() ?? "";
       if (!email) return null;
       return {
@@ -61,14 +61,27 @@ function readAuthIdentity(userId: string): Promise<AuthIdentity | null> {
   )();
 }
 
+/** Supabase no responde: no se cierra la sesión, se muestra el error y se reintenta. */
+export class AuthNoDisponibleError extends Error {
+  constructor(cause: unknown) {
+    super("Supabase no disponible");
+    this.name = "AuthNoDisponibleError";
+    this.cause = cause;
+  }
+}
+
+/**
+ * `null` = la sesión ya no vale (usuario borrado o cuenta desactivada).
+ * Lanza AuthNoDisponibleError si Supabase falla: eso no debe cerrar la sesión.
+ */
 export async function loadUserContext(userId: string): Promise<UserContext | null> {
   const admin = createServiceRoleClient();
 
   let identity: AuthIdentity | null;
   try {
     identity = await readAuthIdentity(userId);
-  } catch {
-    return null;
+  } catch (err) {
+    throw new AuthNoDisponibleError(err);
   }
   if (!identity) return null;
 
@@ -87,7 +100,7 @@ export async function loadUserContext(userId: string): Promise<UserContext | nul
   ]);
 
   if (accountResult.error) {
-    throw new Error(`app_user_account: ${accountResult.error.message}`);
+    throw new AuthNoDisponibleError(new Error(`app_user_account: ${accountResult.error.message}`));
   }
 
   // Fila ausente = cuenta activa (mismo criterio que icam).
@@ -107,20 +120,27 @@ export async function loadUserContext(userId: string): Promise<UserContext | nul
   };
 }
 
-/** SERVER: memoizado por request con React cache(). */
+/**
+ * SERVER: memoizado por request con React cache().
+ * `null` = sin sesión válida. Si Supabase no responde lanza AuthNoDisponibleError
+ * (antes devolvía null: cerraba la sesión y, con la cookie aún válida, el proxy
+ * y la app se mandaban el uno al otro entre /login y / sin fin).
+ */
 export const getCurrentUser = cache(async (): Promise<UserContext | null> => {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
   const verified = await verifySessionToken(token);
   if (!verified) return null;
-  try {
-    return await loadUserContext(verified.user_id);
-  } catch (err) {
-    console.error("[auth] loadUserContext failed", err);
-    return null;
-  }
+  return loadUserContext(verified.user_id);
 });
+
+/** Hay cookie de sesión con firma válida, aunque la cuenta ya no exista o esté de baja. */
+export async function haySesionFirmada(): Promise<boolean> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  return !!token && (await verifySessionToken(token)) !== null;
+}
 
 /** SERVER: igual que getCurrentUser pero exige sesión. */
 export async function requireCurrentUser(): Promise<UserContext> {

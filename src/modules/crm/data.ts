@@ -1,4 +1,5 @@
 import type { CrmClient } from "@/lib/db/server";
+import { hoyMadrid } from "@/lib/format";
 import type { TotalesActividad } from "@/modules/crm/gamificacion";
 import type { Etiqueta, Hito, HitoPersona, Persona, Relacion } from "@/modules/crm/types";
 
@@ -50,16 +51,38 @@ function check<T>(result: { data: T | null; error: { message: string } | null },
   return result.data as T;
 }
 
+/** Tope de filas por respuesta de la API de Supabase (ajuste «Max Rows», 1000 por defecto). */
+const PAGINA = 1000;
+
+/**
+ * Trae todas las filas por páginas: la API corta en silencio a PAGINA filas y,
+ * con la captura de calendario, un empleado supera ese número de contactos.
+ */
+async function todas<T>(
+  pagina: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  what: string,
+): Promise<T[]> {
+  const filas: T[] = [];
+  for (let desde = 0; ; desde += PAGINA) {
+    const lote = check(await pagina(desde, desde + PAGINA - 1), what) ?? [];
+    filas.push(...lote);
+    if (lote.length < PAGINA) return filas;
+  }
+}
+
 /** Relaciones del empleado (Mis contactos). Es un filtro: el admin también ve aquí solo las suyas. */
 export async function listMisRelaciones(db: CrmClient, userId: string): Promise<Relacion[]> {
-  const rows = check(
-    await db
-      .from("relaciones")
-      .select(RELACION_SELECT)
-      .eq("empleado_id", userId)
-      .order("created_at", { ascending: false }),
+  const rows = await todas<Row>(
+    (desde, hasta) =>
+      db
+        .from("relaciones")
+        .select(RELACION_SELECT)
+        .eq("empleado_id", userId)
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(desde, hasta),
     "relaciones",
-  ) as Row[];
+  );
   return rows.map(mapRelacion).sort((a, b) => a.persona.nombre.localeCompare(b.persona.nombre));
 }
 
@@ -88,22 +111,41 @@ export async function listEtiquetas(db: CrmClient): Promise<Etiqueta[]> {
   return rows;
 }
 
-export async function getPuntos(db: CrmClient, userId: string) {
-  const [puntos, bonos, config] = await Promise.all([
-    db.from("puntos").select("delta").eq("empleado_id", userId),
-    db.from("bonos").select("id, fecha, importe, estado").eq("empleado_id", userId).order("fecha", { ascending: false }),
-    db.from("config").select("clave, valor").in("clave", ["puntos_por_bono", "importe_bono"]),
-  ]);
-  const total = (check(puntos, "puntos") as { delta: number }[]).reduce((s, p) => s + p.delta, 0);
-  const cfg = new Map((check(config, "config") as { clave: string; valor: unknown }[]).map((c) => [c.clave, Number(c.valor)]));
-  const porBono = cfg.get("puntos_por_bono") || 50;
+/** Puntos del empleado, sumados en SQL (la API corta las listas a 1000 filas). */
+export async function getPuntos(db: CrmClient) {
+  const { data, error } = await db.rpc("mis_puntos");
+  if (error) throw new Error(`mis_puntos: ${error.message}`);
+  const r = data as { total: number; por_bono: number; importe_bono: number; bonos: { id: string; fecha: string; importe: number; estado: string }[] };
+  const porBono = r.por_bono || 50;
   return {
-    total,
+    total: r.total,
     porBono,
-    importeBono: cfg.get("importe_bono") || 100,
-    haciaSiguiente: ((total % porBono) + porBono) % porBono,
-    bonos: check(bonos, "bonos") as { id: string; fecha: string; importe: number; estado: string }[],
+    importeBono: r.importe_bono || 100,
+    haciaSiguiente: ((r.total % porBono) + porBono) % porBono,
+    bonos: r.bonos ?? [],
   };
+}
+
+/** Lo que pinta la cabecera en cada carga: pendientes del ritual y días con actividad (Madrid). */
+export async function getCabecera(db: CrmClient): Promise<{ pendientes: number; dias_activos: string[] }> {
+  const { data, error } = await db.rpc("cabecera");
+  if (error) throw new Error(`cabecera: ${error.message}`);
+  return data as { pendientes: number; dias_activos: string[] };
+}
+
+export interface BolsaItem {
+  relacion_id: string;
+  persona_id: string;
+  persona_nombre: string;
+  persona_email: string | null;
+  empresa: string | null;
+  estado: string;
+  ultima_reunion: string | null;
+  empleado_nombre: string;
+}
+
+export function listBolsa(db: CrmClient): Promise<BolsaItem[]> {
+  return todas<BolsaItem>((desde, hasta) => db.rpc("bolsa_comun").range(desde, hasta), "bolsa_comun");
 }
 
 export async function listHitos(db: CrmClient): Promise<Hito[]> {
@@ -252,8 +294,9 @@ export interface StatsBolsa {
   mis_rescates: number;
 }
 
+/** Primer día (Madrid) de un rango de `dias` días que termina hoy. */
 export function desdeDias(dias: number): string {
-  const d = new Date();
+  const d = new Date(`${hoyMadrid()}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() - (dias - 1));
   return d.toISOString().slice(0, 10);
 }

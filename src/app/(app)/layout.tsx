@@ -4,46 +4,30 @@ import { FxProvider } from "@/components/fx/FxProvider";
 import { AddFab } from "@/components/layout/AddFab";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BottomNav } from "@/components/layout/BottomNav";
-import { getCurrentUser } from "@/lib/auth/currentUser";
+import { getCurrentUser, haySesionFirmada } from "@/lib/auth/currentUser";
 import { getCrm } from "@/lib/db/server";
 import { hoyMadrid } from "@/lib/format";
+import { getCabecera } from "@/modules/crm/data";
 import { rachaDe } from "@/modules/crm/gamificacion";
 
-async function contarPendientes(): Promise<number> {
+/** Pendientes del ritual y racha, en un solo RPC (antes eran dos consultas y la racha traía filas sueltas). */
+async function cabecera(): Promise<{ pendientes: number; racha: number }> {
   try {
-    const { db, user } = await getCrm();
-    const { count } = await db
-      .from("relaciones")
-      .select("id", { count: "exact", head: true })
-      .eq("empleado_id", user.id)
-      .eq("estado", "nueva");
-    return count ?? 0;
+    const { db } = await getCrm();
+    const c = await getCabecera(db);
+    return { pendientes: c.pendientes, racha: rachaDe(c.dias_activos, hoyMadrid()).actual };
   } catch {
-    return 0;
-  }
-}
-
-/** Racha para la cabecera: días seguidos con contactos en hitos o clasificaciones. */
-async function calcularRacha(): Promise<number> {
-  try {
-    const { db, user } = await getCrm();
-    const desde = new Date(Date.now() - 120 * 86_400_000).toISOString();
-    const [eventos, puntos] = await Promise.all([
-      db.from("hito_eventos").select("created_at").eq("empleado_id", user.id).in("accion", ["contactar", "incluir"]).gte("created_at", desde),
-      db.from("puntos").select("created_at").eq("empleado_id", user.id).gt("delta", 0).gte("created_at", desde),
-    ]);
-    const dias = [...(eventos.data ?? []), ...(puntos.data ?? [])].map((r) => (r.created_at as string).slice(0, 10));
-    return rachaDe(dias, hoyMadrid()).actual;
-  } catch {
-    return 0;
+    return { pendientes: 0, racha: 0 };
   }
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  // Cookie válida pero cuenta de baja o borrada: hay que invalidar la cookie, o el
+  // proxy devolvería /login → / y la app / → /login sin fin.
+  if (!user) redirect((await haySesionFirmada()) ? "/login?motivo=sesion" : "/login");
 
-  const [pendientes, racha] = await Promise.all([contarPendientes(), calcularRacha()]);
+  const { pendientes, racha } = await cabecera();
   const shellUser = {
     name: user.name,
     email: user.email,

@@ -18,7 +18,7 @@ export default async function InicioPage() {
   const { db, user } = await getCrm();
   const [relaciones, puntos, hitos, stats, posicion, resumen] = await Promise.all([
     listMisRelaciones(db, user.id),
-    getPuntos(db, user.id),
+    getPuntos(db),
     listHitos(db),
     getStatsEmpleado(db, desdeDias(7)),
     getMiPosicion(db, desdeDias(7)),

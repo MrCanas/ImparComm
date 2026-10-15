@@ -35,6 +35,11 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isLoginPage) {
+    // La app manda aquí con `motivo=sesion` cuando la cookie es válida pero la
+    // cuenta ya no (baja o borrada): se invalida la cookie en vez de volver a /.
+    if (request.nextUrl.searchParams.get("motivo") === "sesion") {
+      return sinCookieDeSesion(request);
+    }
     return isAuthenticated
       ? NextResponse.redirect(new URL("/", request.url))
       : NextResponse.next();
@@ -52,6 +57,21 @@ export async function proxy(request: NextRequest) {
   }
 
   return withRenewedSession(NextResponse.next(), session);
+}
+
+/** Deja pasar sin la cookie (también en la petición, para que la página no la lea) y la borra. */
+function sinCookieDeSesion(request: NextRequest): NextResponse {
+  const headers = new Headers(request.headers);
+  const restantes = request.cookies
+    .getAll()
+    .filter((c) => c.name !== SESSION_COOKIE_NAME)
+    .map((c) => `${c.name}=${c.value}`)
+    .join("; ");
+  if (restantes) headers.set("cookie", restantes);
+  else headers.delete("cookie");
+  const response = NextResponse.next({ request: { headers } });
+  response.cookies.set(SESSION_COOKIE_NAME, "", { ...SESSION_COOKIE_OPTIONS, maxAge: 0 });
+  return response;
 }
 
 /** Sesión deslizante: si quedan menos de SESSION_RENEW_BELOW_S, se emite otra de 7 días. */

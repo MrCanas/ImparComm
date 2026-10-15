@@ -96,8 +96,6 @@ export function RitualDeck({
         return;
       }
       const n = res.data?.archivadas ?? 0;
-      setPuntos((p) => p + n);
-      if (n > 0) premiar(n);
       setArchivadasEnEventos((a) => a + n);
       setEventos((es) => es.filter((e) => e.reunionId !== ev.reunionId));
     });
@@ -128,7 +126,9 @@ export function RitualDeck({
   }
 
   function onClasificar() {
-    if (!actual || pending) return;
+    // `saliendo`: la acción ya resolvió pero la tarjeta sigue en pantalla 180 ms;
+    // un segundo toque actuaría otra vez sobre la misma relación.
+    if (!actual || pending || saliendo) return;
     if (elegidas.length === 0) {
       setError("Elige al menos una etiqueta o archiva.");
       setDx(0);
@@ -151,7 +151,7 @@ export function RitualDeck({
   }
 
   function onArchivar() {
-    if (!actual || pending) return;
+    if (!actual || pending || saliendo) return;
     setError("");
     const r = actual;
     startTransition(async () => {
@@ -161,8 +161,6 @@ export function RitualDeck({
         setDx(0);
         return;
       }
-      setPuntos((p) => p + 1);
-      premiar(1);
       avanzar("izq", { relacion: r, accion: "archivar", añadidas: [] });
     });
   }
@@ -177,7 +175,7 @@ export function RitualDeck({
         setError(res.error);
         return;
       }
-      setPuntos((p) => p - 1);
+      if (ultimo.accion === "clasificar") setPuntos((p) => p - 1);
       setHistorial((h) => h.slice(0, -1));
       setIndice((i) => i - 1);
     });
@@ -267,7 +265,7 @@ export function RitualDeck({
           </p>
           <p className="mt-3 text-sm">
             <strong>{evento.relacionIds.length} contactos nuevos</strong> de esta reunión. Si fue un evento
-            multitudinario, puedes archivarlos de una vez (1 punto cada uno) o revisarlos uno a uno.
+            multitudinario, puedes archivarlos de una vez (sin puntos) o revisarlos uno a uno para clasificarlos.
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             <button type="button" className={btn.danger} disabled={pending} onClick={() => archivarEvento(evento)}>
@@ -399,7 +397,7 @@ export function RitualDeck({
           <Icon name="check" className="h-4 w-4" /> Clasificar
         </button>
       </div>
-      <p className="mt-3 text-center text-xs text-text-muted">1 punto por persona, archivar puntúa igual · {porBono} puntos = bono</p>
+      <p className="mt-3 text-center text-xs text-text-muted">1 punto por contacto clasificado · {porBono} puntos = bono</p>
     </>
   );
 }
