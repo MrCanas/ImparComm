@@ -16,7 +16,7 @@ export default async function RitualPage({ searchParams }: { searchParams: Promi
   const [relaciones, etiquetas, puntos] = await Promise.all([
     listMisRelaciones(db, user.id),
     listEtiquetas(db),
-    getPuntos(db, user.id),
+    getPuntos(db),
   ]);
 
   const dias = periodo === "semana" ? 7 : periodo === "mes" ? 31 : null;

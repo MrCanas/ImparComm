@@ -21,3 +21,11 @@ jobs:
         run: npm run lint
       - name: Tests
         run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          AUTH_JWT_SECRET: ci-only-secret-of-at-least-32-characters
+          NEXT_PUBLIC_SUPABASE_URL: https://ci.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci
+      - name: Vulnerabilidades (runtime, alta o crítica)
+        run: npm audit --omit=dev --audit-level=high

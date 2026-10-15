@@ -10,10 +10,9 @@ import { Icon, type IconName } from "@/components/ui/Icon";
 import { SectionTitle } from "@/components/ui/PageHeader";
 import { card } from "@/components/ui/styles";
 import type { StatsEmpleado, StatsEquipo } from "@/modules/crm/data";
+import { RANGOS_ANALITICAS as RANGOS } from "@/modules/crm/types";
 import type { Objetivo } from "@/modules/crm/gamificacion";
 import { ListaObjetivos, ResumenActividad } from "@/modules/crm/ui/Actividad";
-
-export const RANGOS = [7, 30, 90] as const;
 
 function Segmentos<T extends string | number>({
   opciones,

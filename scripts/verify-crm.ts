@@ -118,13 +118,25 @@ async function main() {
   ok(r1!.proximo_recordatorio === esperado, `Recordatorio = plazo más corto (30 d): ${r1!.proximo_recordatorio}`);
   ok((await puntosDe(B.db, B.id)) === puntosB0 + 1, "Clasificar suma 1 punto");
 
-  // 4. Deshacer resta; archivar suma; recuperar
+  // 4. Deshacer resta; archivar no puntúa; cada contacto vale 1 punto como mucho
   await B.db.from("relaciones").update({ estado: "nueva" }).eq("id", relId);
   ok((await puntosDe(B.db, B.id)) === puntosB0, "Deshacer resta el punto");
   await B.db.from("relaciones").update({ estado: "archivada" }).eq("id", relId);
-  ok((await puntosDe(B.db, B.id)) === puntosB0 + 1, "Archivar puntúa igual que clasificar");
+  ok((await puntosDe(B.db, B.id)) === puntosB0, "Archivar no puntúa");
   await B.db.from("relaciones").update({ estado: "clasificada" }).eq("id", relId);
-  ok((await puntosDe(B.db, B.id)) === puntosB0 + 1, "Recuperar archivado → clasificada no duplica puntos");
+  ok((await puntosDe(B.db, B.id)) === puntosB0 + 1, "Recuperar archivado → clasificada puntúa (una vez)");
+  await B.db.from("relaciones").update({ estado: "archivada" }).eq("id", relId);
+  await B.db.from("relaciones").update({ estado: "nueva" }).eq("id", relId);
+  await B.db.from("relaciones").update({ estado: "clasificada" }).eq("id", relId);
+  ok((await puntosDe(B.db, B.id)) === puntosB0 + 1, "Archivar → nueva → clasificar no acumula puntos");
+  const { error: eSwap } = await B.db.from("relaciones").update({ persona_id: p2 }).eq("id", relId);
+  ok(!!eSwap && /permission denied|column/i.test(eSwap.message), "B no puede cambiar la persona de una relación");
+  const { error: eIns } = await B.db.from("relaciones").insert({ empleado_id: B.id, persona_id: p2 });
+  ok(!!eIns, "B no puede insertar relaciones directamente (solo por RPC)");
+  const { data: mp, error: emp } = await B.db.rpc("mis_puntos");
+  ok(!emp && (mp as { total: number }).total === puntosB0 + 1, `mis_puntos suma en SQL (${emp?.message ?? "ok"})`);
+  const { data: cab, error: ecab } = await B.db.rpc("cabecera");
+  ok(!ecab && Array.isArray((cab as { dias_activos: string[] }).dias_activos), `cabecera (${ecab?.message ?? "ok"})`);
 
   // 5. Etiqueta personal invisible para otros (no admin)
   const { data: personal } = await B.db.from("etiquetas")
@@ -143,16 +155,28 @@ async function main() {
   ok(!eIncl, `B incluye a su contacto en el hito (${eIncl?.message ?? "ok"})`);
   const { error: eAjena } = await B.db.from("hito_persona").insert({ hito_id: hito!.id, persona_id: p2, incluida_por: B.id });
   ok(!!eAjena, "B no puede incluir a una persona que no conoce");
-  await B.db.from("hito_persona")
-    .update({ estado: "contactado", canal: "Email", contactado_por: B.id, fecha_contacto: new Date().toISOString() })
+  const { error: eForja } = await B.db.from("hito_persona")
+    .update({ estado: "contactado", contactado_por: A.id })
     .eq("hito_id", hito!.id).eq("persona_id", p1);
-  const { data: hpA } = await A.db.from("hito_persona").select("estado, contactado_por").eq("hito_id", hito!.id);
-  ok(hpA?.[0]?.estado === "contactado" && hpA[0].contactado_por === B.id, "A ve «Contactado por B» (persona compartida)");
+  ok(!!eForja, "B no puede escribir contactado_por (lo fija la base)");
+  await B.db.from("hito_persona")
+    .update({ estado: "contactado", canal: "Email" })
+    .eq("hito_id", hito!.id).eq("persona_id", p1);
+  const { data: hpA } = await A.db.from("hito_persona").select("estado, contactado_por, fecha_contacto").eq("hito_id", hito!.id);
+  ok(hpA?.[0]?.estado === "contactado" && hpA[0].contactado_por === B.id && !!hpA[0].fecha_contacto, "A ve «Contactado por B» (quién y cuándo los pone el trigger)");
+  const { error: eConfig } = await A.db.from("config").upsert({ clave: "puntos_por_bono", valor: 12.5 });
+  ok(!!eConfig, "Un parámetro decimal se rechaza en la base");
+  const { error: eGmail } = await A.db.rpc("contar_purga_dominios", { p_dominios: ["gmail.com"] });
+  ok(!!eGmail && /personal/.test(eGmail.message), "gmail.com no puede ser dominio interno");
+  const { data: nPurga, error: ePurga } = await A.db.rpc("contar_purga_dominios", { p_dominios: [DOMINIO] });
+  ok(!ePurga && Number(nPurga) === 0, `Previsualización de purga (${ePurga?.message ?? nPurga})`);
+  const { error: ePurgaB } = await B.db.rpc("contar_purga_dominios", { p_dominios: [DOMINIO] });
+  ok(!!ePurgaB, "Un no admin no puede previsualizar la purga");
   const { data: nombres } = await A.db.rpc("empleados_display", { p_ids: [B.id] });
   ok((nombres as unknown[])?.length === 1, "Nombre del empleado resoluble para «Contactado por»");
 
   // 6b. Historial de movimientos (006): incluir → contactar → volver a pte
-  await B.db.from("hito_persona").update({ estado: "pte", canal: null, contactado_por: null, fecha_contacto: null })
+  await B.db.from("hito_persona").update({ estado: "pte" })
     .eq("hito_id", hito!.id).eq("persona_id", p1);
   const { data: evs } = await B.db.from("hito_eventos").select("accion, empleado_id, canal").eq("hito_id", hito!.id).order("id");
   const acciones = (evs ?? []).map((e) => e.accion).join(",");
@@ -173,7 +197,7 @@ async function main() {
   const { data: posB, error: epB } = await B.db.rpc("mi_posicion", { p_desde: "2026-01-01" });
   ok(!epB && (posB as { posicion: number }).posicion >= 1, "mi_posicion devuelve la posición propia");
   await B.db.from("hito_persona")
-    .update({ estado: "contactado", canal: "Email", contactado_por: B.id, fecha_contacto: new Date().toISOString() })
+    .update({ estado: "contactado", canal: "Email" })
     .eq("hito_id", hito!.id).eq("persona_id", p1);
 
   // 7. Resumen admin y bloqueo a no admin
