@@ -2,6 +2,13 @@ import { SignJWT, jwtVerify } from "jose";
 
 const ALGORITHM = "HS256";
 
+/**
+ * icam firma con el mismo AUTH_JWT_SECRET. Sin issuer/audience propios, cualquier
+ * token HS256 de icam con un `sub` valdría como sesión de ImparComm.
+ */
+const ISSUER = "impar-comm";
+const AUDIENCE = "impar-comm";
+
 /** Cookie de sesión de ImparComm (mismo AUTH_JWT_SECRET que icam). */
 export const SESSION_COOKIE_NAME = "impar-comm-auth";
 
@@ -54,6 +61,8 @@ export async function signSessionToken(
   return new SignJWT({})
     .setProtectedHeader({ alg: ALGORITHM })
     .setSubject(userId)
+    .setIssuer(ISSUER)
+    .setAudience(AUDIENCE)
     .setIssuedAt()
     .setExpirationTime(expiresIn)
     .sign(getJwtSecret());
@@ -69,6 +78,8 @@ export async function verifySessionToken(
   try {
     const { payload } = await jwtVerify(token, getJwtSecret(), {
       algorithms: [ALGORITHM],
+      issuer: ISSUER,
+      audience: AUDIENCE,
     });
     const user_id = typeof payload.sub === "string" ? payload.sub : null;
     if (!user_id) return null;
