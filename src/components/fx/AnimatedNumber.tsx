@@ -54,9 +54,12 @@ export function AnimatedNumber({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- format se recrea en cada render
   }, [value, inView, reducido]);
 
+  // El servidor pinta el valor final: así no hay desajuste de hidratación (el
+  // servidor no sabe si el usuario tiene «reducir movimiento») y los lectores de
+  // pantalla no leen «0». La cuenta desde 0 empieza al montar.
   return (
-    <span ref={ref} className={`inline-block tabular-nums ${className ?? ""}`}>
-      {format(reducido ? value : 0)}
+    <span ref={ref} className={`inline-block tabular-nums ${className ?? ""}`} aria-label={format(value)}>
+      {format(value)}
     </span>
   );
 }

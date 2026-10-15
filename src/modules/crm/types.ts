@@ -57,6 +57,11 @@ export interface HitoPersona {
   persona: Persona;
 }
 
+/** Rangos de días del selector de Analíticas. Vive aquí (módulo compartido) porque
+ *  una constante exportada desde un archivo «use client» llega al servidor como
+ *  referencia de cliente, no como array. */
+export const RANGOS_ANALITICAS = [7, 30, 90] as const;
+
 export const CANALES = ["Email", "Teléfono", "WhatsApp", "En persona", "LinkedIn", "Otro"] as const;
 
 export const TIPOS_HITO = [
