@@ -10,14 +10,40 @@ import { flags } from "@/lib/flags";
 import { sincronizarEmpleado } from "@/lib/graph/calendario";
 import { completarFirmas } from "@/lib/graph/firmas";
 import { registrarContactoEnZoho } from "@/lib/zoho/contactos";
-import type { TipoEtiqueta } from "@/modules/crm/types";
+import { CANALES, type TipoEtiqueta } from "@/modules/crm/types";
 
 export type ActionResult<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
+
+/** Mensajes de PostgREST/Postgres que no deben llegar tal cual al usuario. */
+const ERRORES_CONOCIDOS: [RegExp, string][] = [
+  [/permission denied|row-level security|42501|No autorizado/i, "No tienes permiso para hacer esto"],
+  [/duplicate key|23505/i, "Ya existe un registro igual"],
+  [/violates check constraint|invalid input syntax|22P02|23514/i, "Valor no válido"],
+  [/violates foreign key|23503/i, "Hay datos relacionados que lo impiden"],
+  [/JWT|token/i, "La sesión ha caducado: vuelve a entrar"],
+];
 
 function fail(err: unknown): { ok: false; error: string } {
   const message = err instanceof Error ? err.message : String(err);
   console.error("[crm action]", message);
+  // Los mensajes propios de la app (lanzados con texto en español) se muestran tal cual.
+  const conocido = ERRORES_CONOCIDOS.find(([re]) => re.test(message));
+  if (conocido && !/ya no existe|no tienes permiso|Solo quien|dominio/i.test(message)) return { ok: false, error: conocido[1] };
   return { ok: false, error: message.replace(/^.*?:\s/, "") || "Error inesperado" };
+}
+
+/**
+ * Lanza si la operación no tocó ninguna fila. Con RLS, un update o delete sobre
+ * una fila ajena no falla: devuelve 0 filas, y la acción decía «ok» sin hacer nada.
+ */
+function exigirFilas(res: { data: unknown[] | null; error: { message: string } | null }, que: string): void {
+  if (res.error) throw new Error(res.error.message);
+  if (!res.data?.length) throw new Error(`${que}: no tienes permiso o ya no existe`);
+}
+
+/** `%` y `_` son comodines en ILIKE: escapados, el texto del usuario se compara literal. */
+function literalLike(texto: string): string {
+  return texto.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 function texto(v: FormDataEntryValue | null): string {
@@ -65,7 +91,7 @@ export async function actualizarPersona(personaId: string, formData: FormData): 
     let empresaId: string | null = null;
     const empresa = texto(formData.get("empresa"));
     if (empresa) {
-      const { data: existente } = await db.from("empresas").select("id").ilike("nombre", empresa).maybeSingle();
+      const { data: existente } = await db.from("empresas").select("id").ilike("nombre", literalLike(empresa)).limit(1).maybeSingle();
       if (existente) {
         empresaId = existente.id as string;
       } else {
@@ -94,8 +120,7 @@ export async function actualizarPersona(personaId: string, formData: FormData): 
 export async function guardarNotas(relacionId: string, personaId: string, notas: string): Promise<ActionResult> {
   try {
     const { db } = await getCrm();
-    const { error } = await db.from("relaciones").update({ notas: notas.trim() || null }).eq("id", relacionId);
-    if (error) throw new Error(error.message);
+    exigirFilas(await db.from("relaciones").update({ notas: notas.trim() || null }).eq("id", relacionId).select("id"), "Notas");
     revalidatePath(`/contactos/${personaId}`);
     return { ok: true };
   } catch (err) {
@@ -110,8 +135,7 @@ export async function cambiarEstado(
 ): Promise<ActionResult> {
   try {
     const { db } = await getCrm();
-    const { error } = await db.from("relaciones").update({ estado }).eq("id", relacionId);
-    if (error) throw new Error(error.message);
+    exigirFilas(await db.from("relaciones").update({ estado }).eq("id", relacionId).select("id"), "Contacto");
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (err) {
@@ -139,8 +163,9 @@ export async function crearEtiqueta(
     const { data: existente } = await db
       .from("etiquetas")
       .select("id, nombre, tipo, plazo_dias")
-      .ilike("nombre", limpio)
+      .ilike("nombre", literalLike(limpio))
       .eq("tipo", tipo)
+      .limit(1)
       .maybeSingle();
     if (existente) return { ok: true, data: existente as never };
 
@@ -221,7 +246,7 @@ export async function clasificar(
   }
 }
 
-/** Tarjeta «Evento»: archiva de golpe a los asistentes nuevos de una reunión grande (+1 punto cada uno). */
+/** Tarjeta «Evento»: archiva de golpe a los asistentes nuevos de una reunión grande (archivar no puntúa). */
 export async function archivarVarias(relacionIds: string[]): Promise<ActionResult<{ archivadas: number }>> {
   try {
     if (relacionIds.length === 0) return { ok: true, data: { archivadas: 0 } };
@@ -296,8 +321,7 @@ export async function crearHito(formData: FormData): Promise<ActionResult<{ id: 
 export async function eliminarHito(hitoId: string): Promise<ActionResult> {
   try {
     const { db } = await getCrm();
-    const { error } = await db.from("hitos").delete().eq("id", hitoId);
-    if (error) throw new Error(error.message);
+    exigirFilas(await db.from("hitos").delete().eq("id", hitoId).select("id"), "Hito");
     revalidatePath("/hitos");
     return { ok: true };
   } catch (err) {
@@ -326,8 +350,7 @@ export async function incluirEnHito(hitoId: string, personaIds: string[]): Promi
 export async function quitarDeHito(hitoId: string, personaId: string): Promise<ActionResult> {
   try {
     const { db } = await getCrm();
-    const { error } = await db.from("hito_persona").delete().eq("hito_id", hitoId).eq("persona_id", personaId);
-    if (error) throw new Error(error.message);
+    exigirFilas(await db.from("hito_persona").delete().eq("hito_id", hitoId).eq("persona_id", personaId).select("persona_id"), "Invitado");
     revalidatePath(`/hitos/${hitoId}`);
     return { ok: true };
   } catch (err) {
@@ -336,17 +359,19 @@ export async function quitarDeHito(hitoId: string, personaId: string): Promise<A
 }
 
 /**
- * Pte → Contactado. No reinicia el recordatorio (regla de negocio: solo una
- * reunión lo reinicia). Dispara el alta/actualización en Zoho (fase 4).
+ * Pte → Contactado. Quién y cuándo lo fija la base (trigger hito_persona_before),
+ * el cliente solo manda estado y canal. Dispara el alta/actualización en Zoho.
  */
 export async function marcarContactado(hitoId: string, personaId: string, canal: string): Promise<ActionResult> {
   try {
     const { db, user } = await getCrm();
+    if (!(CANALES as readonly string[]).includes(canal)) return { ok: false, error: "Canal no válido" };
     const { data, error } = await db
       .from("hito_persona")
-      .update({ estado: "contactado", canal: canal || null, contactado_por: user.id, fecha_contacto: new Date().toISOString() })
+      .update({ estado: "contactado", canal })
       .eq("hito_id", hitoId)
       .eq("persona_id", personaId)
+      .eq("estado", "pte")
       .select("persona_id");
     if (error) throw new Error(error.message);
     if (!data?.length) return { ok: false, error: "No puedes modificar este invitado" };
@@ -377,12 +402,11 @@ export async function reintentarZoho(hitoId: string, personaId: string): Promise
 export async function volverAPendiente(hitoId: string, personaId: string): Promise<ActionResult> {
   try {
     const { db } = await getCrm();
-    const { error } = await db
-      .from("hito_persona")
-      .update({ estado: "pte", canal: null, contactado_por: null, fecha_contacto: null })
-      .eq("hito_id", hitoId)
-      .eq("persona_id", personaId);
-    if (error) throw new Error(error.message);
+    // Solo quien lo contactó (o un admin) puede revertirlo: lo comprueba el trigger.
+    exigirFilas(
+      await db.from("hito_persona").update({ estado: "pte" }).eq("hito_id", hitoId).eq("persona_id", personaId).select("persona_id"),
+      "Invitado",
+    );
     revalidatePath(`/hitos/${hitoId}`);
     return { ok: true };
   } catch (err) {
@@ -423,8 +447,7 @@ export async function cambiarPlazo(etiquetaId: string, plazoDias: number): Promi
   try {
     if (!Number.isInteger(plazoDias) || plazoDias < 1) return { ok: false, error: "Plazo no válido" };
     const { db } = await getCrm();
-    const { error } = await db.from("etiquetas").update({ plazo_dias: plazoDias }).eq("id", etiquetaId);
-    if (error) throw new Error(error.message);
+    exigirFilas(await db.from("etiquetas").update({ plazo_dias: plazoDias }).eq("id", etiquetaId).select("id"), "Etiqueta");
     revalidatePath("/admin");
     return { ok: true };
   } catch (err) {
@@ -447,12 +470,12 @@ export async function convertirEnGeneral(etiquetaId: string): Promise<ActionResu
 
 export async function marcarBonoEntregado(bonoId: string, entregado: boolean): Promise<ActionResult> {
   try {
-    const { db } = await getCrm();
-    const { error } = await db
-      .from("bonos")
-      .update({ estado: entregado ? "entregado" : "pendiente" })
-      .eq("id", bonoId);
-    if (error) throw new Error(error.message);
+    const { db, user } = await getCrm();
+    if (!user.isAdmin) return { ok: false, error: "No autorizado" };
+    exigirFilas(
+      await db.from("bonos").update({ estado: entregado ? "entregado" : "pendiente" }).eq("id", bonoId).neq("estado", "anulado").select("id"),
+      "Bono",
+    );
     revalidatePath("/admin");
     return { ok: true };
   } catch (err) {
@@ -460,10 +483,36 @@ export async function marcarBonoEntregado(bonoId: string, entregado: boolean): P
   }
 }
 
+/** Anula un bono (sigue contando para no volver a emitirlo). Para puntos conseguidos de forma indebida. */
+export async function anularBono(bonoId: string): Promise<ActionResult> {
+  try {
+    const { db, user } = await getCrm();
+    if (!user.isAdmin) return { ok: false, error: "No autorizado" };
+    exigirFilas(await db.from("bonos").update({ estado: "anulado" }).eq("id", bonoId).select("id"), "Bono");
+    revalidatePath("/admin");
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Parámetros numéricos editables. Enteros: un decimal rompía el trigger de puntos (::integer). */
+const CONFIG_EDITABLE: Record<string, { entero: boolean }> = {
+  plazo_defecto_dias: { entero: true },
+  puntos_por_bono: { entero: true },
+  evento_umbral_externos: { entero: true },
+  importe_bono: { entero: false },
+};
+
 export async function guardarConfig(clave: string, valor: number): Promise<ActionResult> {
   try {
-    if (!Number.isFinite(valor) || valor <= 0) return { ok: false, error: "Valor no válido" };
-    const { db } = await getCrm();
+    const def = CONFIG_EDITABLE[clave];
+    if (!def) return { ok: false, error: "Parámetro desconocido" };
+    if (!Number.isFinite(valor) || valor <= 0 || (def.entero && !Number.isInteger(valor))) {
+      return { ok: false, error: def.entero ? "Tiene que ser un número entero mayor que 0" : "Tiene que ser mayor que 0" };
+    }
+    const { db, user } = await getCrm();
+    if (!user.isAdmin) return { ok: false, error: "No autorizado" };
     const { error } = await db.from("config").upsert({ clave, valor, updated_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
     revalidatePath("/admin");
@@ -495,9 +544,10 @@ export async function guardarPermiso(formData: FormData): Promise<ActionResult> 
 
 export async function quitarPermiso(userId: string): Promise<ActionResult> {
   try {
-    const { db } = await getCrm();
-    const { error } = await db.from("permisos").delete().eq("user_id", userId);
-    if (error) throw new Error(error.message);
+    const { db, user } = await getCrm();
+    if (!user.isAdmin) return { ok: false, error: "No autorizado" };
+    if (userId === user.id) return { ok: false, error: "No puedes quitarte tus propios permisos" };
+    exigirFilas(await db.from("permisos").delete().eq("user_id", userId).select("user_id"), "Permiso");
     revalidatePath("/admin");
     return { ok: true };
   } catch (err) {
@@ -546,13 +596,40 @@ export async function sincronizarMiCalendario(): Promise<
   }
 }
 
-export async function guardarDominiosInternos(texto: string): Promise<ActionResult<{ purgadas: number }>> {
+function parsearDominios(texto: string): string[] | null {
+  const dominios = [...new Set(texto.split(/[\s,;]+/).map((d) => d.trim().toLowerCase().replace(/^@/, "")).filter(Boolean))];
+  if (dominios.length === 0 || dominios.some((d) => !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d))) return null;
+  return dominios;
+}
+
+/**
+ * Cuántos contactos del calendario se borrarían al declarar internos estos
+ * dominios. También rechaza dominios de correo personal (gmail.com borraría
+ * media agenda). Se muestra antes de guardar.
+ */
+export async function previsualizarDominiosInternos(texto: string): Promise<ActionResult<{ purgadas: number }>> {
   try {
-    const dominios = [...new Set(texto.split(/[\s,;]+/).map((d) => d.trim().toLowerCase().replace(/^@/, "")).filter(Boolean))];
-    if (dominios.length === 0) return { ok: false, error: "Indica al menos un dominio" };
-    if (dominios.some((d) => !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d))) return { ok: false, error: "Algún dominio no es válido" };
+    const dominios = parsearDominios(texto);
+    if (!dominios) return { ok: false, error: "Indica al menos un dominio válido" };
     const { db, user } = await getCrm();
     if (!user.isAdmin) return { ok: false, error: "No autorizado" };
+    const { data, error } = await db.rpc("contar_purga_dominios", { p_dominios: dominios });
+    if (error) throw new Error(error.message);
+    return { ok: true, data: { purgadas: (data as number) ?? 0 } };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function guardarDominiosInternos(texto: string): Promise<ActionResult<{ purgadas: number }>> {
+  try {
+    const dominios = parsearDominios(texto);
+    if (!dominios) return { ok: false, error: "Indica al menos un dominio válido" };
+    const { db, user } = await getCrm();
+    if (!user.isAdmin) return { ok: false, error: "No autorizado" };
+    // Valida (dominios personales) antes de tocar nada.
+    const { error: ev } = await db.rpc("contar_purga_dominios", { p_dominios: dominios });
+    if (ev) throw new Error(ev.message);
     const { error } = await db.from("config").upsert({ clave: "dominios_internos", valor: dominios, updated_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
     // Lo capturado antes de declarar internos esos dominios deja de ser un contacto.

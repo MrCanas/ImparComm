@@ -9,7 +9,7 @@ export const metadata = { title: "Más" };
 
 export default async function MasPage() {
   const { db, user } = await getCrm();
-  const puntos = await getPuntos(db, user.id);
+  const puntos = await getPuntos(db);
 
   const enlaces: { href: string; label: string; desc: string; icon: IconName; show: boolean }[] = [
     { href: "/contactos/nuevo", label: "Añadir contacto", desc: "Comidas y encuentros fuera del calendario", icon: "plus", show: true },

@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 import { EmptyState, SectionTitle } from "@/components/ui/PageHeader";
 import { btn, card, input, label } from "@/components/ui/styles";
 import { fmtFecha } from "@/lib/format";
 import {
+  anularBono,
   cambiarPlazo,
   convertirEnGeneral,
   enviarmeResumenPrueba,
@@ -16,6 +18,7 @@ import {
   guardarDominiosInternos,
   guardarPermiso,
   marcarBonoEntregado,
+  previsualizarDominiosInternos,
   quitarPermiso,
   sincronizarMiCalendario,
 } from "@/modules/crm/actions";
@@ -261,6 +264,8 @@ export function ConfigAdmin({
                 id={`cfg-${c.k}`}
                 type="number"
                 min={1}
+                step={c.k === "importe_bono" ? 0.01 : 1}
+                inputMode={c.k === "importe_bono" ? "decimal" : "numeric"}
                 value={v[c.k]}
                 onChange={(e) => setV({ ...v, [c.k]: Number(e.target.value) })}
                 className={input}
@@ -268,10 +273,10 @@ export function ConfigAdmin({
               <button
                 type="button"
                 className={`${btn.secondary} px-3`}
-                disabled={pending || v[c.k] === valores[c.k]}
+                disabled={pending || v[c.k] === valores[c.k] || !(v[c.k] > 0) || (c.k !== "importe_bono" && !Number.isInteger(v[c.k]))}
                 onClick={() => run(() => guardarConfig(c.k, v[c.k]))}
               >
-                OK
+                Guardar
               </button>
             </div>
           </div>
@@ -289,6 +294,7 @@ export function BonosAdmin({
   bonos: { id: string; empleado: string; fecha: string; importe: number; estado: string }[];
 }) {
   const [run, pending, error] = useRun();
+  const [anular, setAnular] = useState<{ id: string; empleado: string } | null>(null);
   if (bonos.length === 0) {
     return <EmptyState title="Aún no se ha generado ningún bono">Se genera uno automáticamente cada vez que un empleado llega al umbral de puntos.</EmptyState>;
   }
@@ -305,18 +311,56 @@ export function BonosAdmin({
               <span className="block font-medium">{b.empleado}</span>
               <span className="text-xs text-text-muted">{fmtFecha(b.fecha)} · {Number(b.importe).toLocaleString("es-ES")} €</span>
             </span>
-            <Badge tone={b.estado === "entregado" ? "green" : "gold"}>{b.estado === "entregado" ? "Entregado" : "Pendiente"}</Badge>
-            <button
-              type="button"
-              className={`${btn.secondary} min-h-10 px-3`}
-              disabled={pending}
-              onClick={() => run(() => marcarBonoEntregado(b.id, b.estado !== "entregado"))}
-            >
-              {b.estado === "entregado" ? "Marcar pendiente" : "Marcar entregado"}
-            </button>
+            <Badge tone={b.estado === "entregado" ? "green" : b.estado === "anulado" ? "muted" : "gold"}>
+              {b.estado === "entregado" ? "Entregado" : b.estado === "anulado" ? "Anulado" : "Pendiente"}
+            </Badge>
+            {b.estado !== "anulado" ? (
+              <>
+                <button
+                  type="button"
+                  className={`${btn.secondary} min-h-10 px-3`}
+                  disabled={pending}
+                  onClick={() => run(() => marcarBonoEntregado(b.id, b.estado !== "entregado"))}
+                >
+                  {b.estado === "entregado" ? "Marcar pendiente" : "Marcar entregado"}
+                </button>
+                <button type="button" className={`${btn.ghost} min-h-10 px-3 text-red-700`} disabled={pending} onClick={() => setAnular({ id: b.id, empleado: b.empleado })}>
+                  Anular
+                </button>
+              </>
+            ) : null}
           </li>
         ))}
       </ul>
+      <Modal
+        open={!!anular}
+        title="¿Anular este bono?"
+        subtitle={anular ? `Bono de ${anular.empleado}` : undefined}
+        width="md"
+        busy={pending}
+        onClose={() => setAnular(null)}
+        footer={
+          <>
+            <button type="button" className={btn.secondary} disabled={pending} onClick={() => setAnular(null)}>Cancelar</button>
+            <button
+              type="button"
+              className={btn.danger}
+              disabled={pending}
+              onClick={() => {
+                const id = anular!.id;
+                setAnular(null);
+                run(() => anularBono(id));
+              }}
+            >
+              Anular bono
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-text-body">
+          El bono queda anulado y no se paga. Sigue contando en el historial, así que no se vuelve a generar por los mismos puntos.
+        </p>
+      </Modal>
     </>
   );
 }
@@ -393,6 +437,7 @@ export function IntegracionesAdmin({
   const [run, pending, error] = useRun();
   const [msg, setMsg] = useState("");
   const [dom, setDom] = useState(dominios);
+  const [purga, setPurga] = useState<number | null>(null);
 
   const filas: { nombre: string; variable: string; activo: boolean; listo: boolean; nota: string }[] = [
     {
@@ -483,12 +528,51 @@ export function IntegracionesAdmin({
             type="button"
             className={btn.secondary}
             disabled={pending || dom === dominios}
-            onClick={() => run(() => guardarDominiosInternos(dom))}
+            onClick={() =>
+              run(async () => {
+                // Antes de guardar: cuántos contactos del calendario se borrarían.
+                const prev = await previsualizarDominiosInternos(dom);
+                if (!prev.ok) return prev;
+                if ((prev.data?.purgadas ?? 0) > 0) {
+                  setPurga(prev.data!.purgadas);
+                  return { ok: true };
+                }
+                return guardarDominiosInternos(dom);
+              })
+            }
           >
             Guardar
           </button>
         </div>
       </section>
+      <Modal
+        open={purga !== null}
+        title="Se borrarán contactos"
+        width="md"
+        busy={pending}
+        onClose={() => setPurga(null)}
+        footer={
+          <>
+            <button type="button" className={btn.secondary} disabled={pending} onClick={() => setPurga(null)}>Cancelar</button>
+            <button
+              type="button"
+              className={btn.danger}
+              disabled={pending}
+              onClick={() => {
+                setPurga(null);
+                run(() => guardarDominiosInternos(dom));
+              }}
+            >
+              Borrar {purga} y guardar
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-text-body">
+          {purga === 1 ? "Hay 1 contacto capturado del calendario" : `Hay ${purga} contactos capturados del calendario`} con estos dominios
+          que aún no se ha pasado a Zoho. Al guardar se borran con sus notas, etiquetas e invitaciones a hitos. No se puede deshacer.
+        </p>
+      </Modal>
 
       <section className={`${card} p-4`}>
         <SectionTitle>Pruebas</SectionTitle>
