@@ -29,7 +29,7 @@ export default async function RitualPage({ searchParams }: { searchParams: Promi
   const eventos = await eventosGrandes(db, cola);
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-xl lg:max-w-[58rem]">
       <PageHeader
         title="Ritual"
         subtitle="Desliza a la derecha para clasificar con etiquetas y a la izquierda para archivar."

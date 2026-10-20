@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { AnimatedNumber } from "@/components/fx/AnimatedNumber";
 import { useFx } from "@/components/fx/FxProvider";
@@ -13,6 +13,7 @@ import { fmtFecha } from "@/lib/format";
 import { archivarVarias, cambiarEstado, clasificar, crearEtiqueta, deshacer } from "@/modules/crm/actions";
 import type { EventoGrande } from "@/modules/crm/data";
 import type { Etiqueta, Relacion } from "@/modules/crm/types";
+import { ColaLateral } from "@/modules/crm/ui/ColaLateral";
 import { Avatar } from "@/modules/crm/ui/ContactList";
 import { etiquetasRapidas, TagPicker } from "@/modules/crm/ui/TagPicker";
 
@@ -280,6 +281,37 @@ export function RitualDeck({
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  // Columna lateral: props estables para que el arrastre de la tarjeta no la re-renderice.
+  const hechosPorId = useMemo(() => new Map(historial.map((h) => [h.relacion.id, h.accion])), [historial]);
+  const bloqueado = pending || saliendo !== null || evento !== undefined;
+  /** Trae una tarjeta pendiente al frente de la cola. */
+  const saltarA = useCallback(
+    (relacionId: string) => {
+      setError("");
+      setCola((c) => {
+        const pos = c.findIndex((x) => x.id === relacionId);
+        if (pos <= indice) return c;
+        const resto = c.filter((x) => x.id !== relacionId);
+        return [...resto.slice(0, indice), c[pos]!, ...resto.slice(indice)];
+      });
+      setDx(0);
+    },
+    [indice],
+  );
+
+  function conCola(contenido: React.ReactNode) {
+    return (
+      <div className="lg:grid lg:grid-cols-[minmax(0,36rem)_20rem] lg:justify-center lg:gap-8">
+        <div className="min-w-0">{contenido}</div>
+        {cola.length > 0 ? (
+          <aside className="hidden lg:sticky lg:top-[6.5rem] lg:block lg:h-[calc(100dvh-13rem)] lg:min-h-[20rem] lg:self-start">
+            <ColaLateral cola={cola} indice={indice} hechos={hechosPorId} bloqueado={bloqueado} onSaltar={saltarA} />
+          </aside>
+        ) : null}
+      </div>
+    );
+  }
+
   const selectorPeriodo = (
     <div className="mb-4 flex rounded-lg border border-subtle bg-card p-1" role="tablist" aria-label="Periodo">
       {PERIODOS.map((p) => (
@@ -311,7 +343,7 @@ export function RitualDeck({
   );
 
   if (evento) {
-    return (
+    return conCola(
       <>
         {selectorPeriodo}
         {marcador}
@@ -342,7 +374,7 @@ export function RitualDeck({
   }
 
   if (!actual) {
-    return (
+    return conCola(
       <>
         {selectorPeriodo}
         {cola.length > 0 ? marcador : null}
@@ -382,7 +414,7 @@ export function RitualDeck({
         ? `translateX(${saliendo === "der" ? 120 : -120}%) rotate(${saliendo === "der" ? 12 : -12}deg)`
         : `translateX(${dx}px) rotate(${rot}deg)`;
 
-  return (
+  return conCola(
     <>
       {selectorPeriodo}
       {marcador}

@@ -194,13 +194,13 @@ export function ContactList({ relaciones, etiquetas }: { relaciones: Relacion[];
   );
 }
 
-export function Avatar({ nombre, size = "md" }: { nombre: string; size?: "md" | "lg" }) {
+export function Avatar({ nombre, size = "md" }: { nombre: string; size?: "sm" | "md" | "lg" }) {
   const partes = nombre.trim().split(/\s+/);
   const ini = `${partes[0]?.[0] ?? ""}${partes.length > 1 ? partes[partes.length - 1]![0] : ""}`.toUpperCase();
   return (
     <span
       className={`flex shrink-0 items-center justify-center rounded-full bg-icam-900/10 font-semibold text-icam-900 ${
-        size === "lg" ? "h-14 w-14 text-lg" : "h-10 w-10 text-sm"
+        size === "lg" ? "h-14 w-14 text-lg" : size === "sm" ? "h-8 w-8 text-xs" : "h-10 w-10 text-sm"
       }`}
       aria-hidden="true"
     >
