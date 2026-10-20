@@ -10,6 +10,11 @@ function norm(s: string) {
   return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
 }
 
+/** Orden de los botones rápidos (generales y luego personales): las teclas 1–9 del ritual lo siguen. */
+export function etiquetasRapidas(all: Etiqueta[]): Etiqueta[] {
+  return [...all.filter((e) => e.tipo === "general"), ...all.filter((e) => e.tipo === "personal")];
+}
+
 /**
  * Selector de etiquetas controlado. Muestra las elegidas como chips, sugiere las
  * existentes al escribir (para no duplicar «Inversor» / «Inversores») y permite
@@ -23,6 +28,8 @@ export function TagPicker({
   onCreate,
   disabled = false,
   quick = false,
+  atajos = false,
+  inputRef,
 }: {
   selected: Etiqueta[];
   all: Etiqueta[];
@@ -32,6 +39,9 @@ export function TagPicker({
   disabled?: boolean;
   /** Muestra las generales como botones de un toque (ritual). */
   quick?: boolean;
+  /** Muestra el número de tecla (1–9) en los botones rápidos. */
+  atajos?: boolean;
+  inputRef?: React.Ref<HTMLInputElement>;
 }) {
   const [q, setQ] = useState("");
   const [tipoNueva, setTipoNueva] = useState<TipoEtiqueta>("general");
@@ -59,14 +69,11 @@ export function TagPicker({
     }
   }
 
-  const generalesRapidas = quick ? all.filter((e) => e.tipo === "general") : [];
-  const personalesRapidas = quick ? all.filter((e) => e.tipo === "personal") : [];
-
   return (
     <div className="space-y-2">
       {quick ? (
         <div className="flex flex-wrap gap-1.5">
-          {[...generalesRapidas, ...personalesRapidas].map((e) => {
+          {etiquetasRapidas(all).map((e, i) => {
             const on = selectedIds.has(e.id);
             return (
               <button
@@ -75,7 +82,7 @@ export function TagPicker({
                 disabled={disabled}
                 aria-pressed={on}
                 onClick={() => (on ? onRemove(e) : onAdd(e))}
-                className={`min-h-9 rounded-full px-3 text-sm font-medium transition ${
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition ${
                   on
                     ? "bg-icam-900 text-white"
                     : e.tipo === "general"
@@ -83,6 +90,15 @@ export function TagPicker({
                       : "border border-dashed border-icam-gold/70 bg-card text-[#7d6235]"
                 }`}
               >
+                {atajos && i < 9 ? (
+                  <kbd
+                    className={`hidden rounded px-1 font-mono text-[11px] leading-4 [@media(hover:hover)]:inline ${
+                      on ? "bg-white/20 text-white" : "bg-subtle/60 text-text-muted"
+                    }`}
+                  >
+                    {i + 1}
+                  </kbd>
+                ) : null}
                 {e.nombre}
               </button>
             );
@@ -114,10 +130,14 @@ export function TagPicker({
 
       <div className="relative">
         <input
+          ref={inputRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Escape") {
+              setQ("");
+              e.currentTarget.blur();
+            } else if (e.key === "Enter") {
               e.preventDefault();
               if (sugerencias[0]) {
                 onAdd(sugerencias[0]);
@@ -128,7 +148,7 @@ export function TagPicker({
             }
           }}
           disabled={disabled}
-          placeholder={quick ? "Otra etiqueta…" : "Añadir etiqueta…"}
+          placeholder={quick ? (atajos ? "Otra etiqueta… (/)" : "Otra etiqueta…") : "Añadir etiqueta…"}
           className={input}
           aria-label="Buscar o crear etiqueta"
         />
