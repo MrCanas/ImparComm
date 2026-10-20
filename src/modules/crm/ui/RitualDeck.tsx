@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { AnimatedNumber } from "@/components/fx/AnimatedNumber";
 import { useFx } from "@/components/fx/FxProvider";
@@ -14,7 +14,7 @@ import { archivarVarias, cambiarEstado, clasificar, crearEtiqueta, deshacer } fr
 import type { EventoGrande } from "@/modules/crm/data";
 import type { Etiqueta, Relacion } from "@/modules/crm/types";
 import { Avatar } from "@/modules/crm/ui/ContactList";
-import { TagPicker } from "@/modules/crm/ui/TagPicker";
+import { etiquetasRapidas, TagPicker } from "@/modules/crm/ui/TagPicker";
 
 const UMBRAL_SWIPE = 110;
 
@@ -67,11 +67,12 @@ export function RitualDeck({
   const [seleccion, setSeleccion] = useState<Record<string, Etiqueta[]>>({});
   const [error, setError] = useState("");
   const [dx, setDx] = useState(0);
-  const [saliendo, setSaliendo] = useState<"izq" | "der" | null>(null);
+  const [saliendo, setSaliendo] = useState<"izq" | "der" | "abajo" | null>(null);
   const [pending, startTransition] = useTransition();
   const inicio = useRef<{ x: number; y: number; id: number } | null>(null);
   // El desplazamiento vive también en una ref: al soltar, el estado puede ir un render por detrás.
   const dxRef = useRef(0);
+  const etiquetaInputRef = useRef<HTMLInputElement>(null);
 
   const actual = cola[indice];
   const elegidas = actual ? (seleccion[actual.id] ?? []) : [];
@@ -165,6 +166,19 @@ export function RitualDeck({
     });
   }
 
+  /** Manda la tarjeta al final de la cola de esta sesión: sin puntos ni cambios en la base de datos. */
+  function onPosponer() {
+    if (!actual || pending || saliendo || indice + 1 >= cola.length) return;
+    setError("");
+    const r = actual;
+    setSaliendo("abajo");
+    setTimeout(() => {
+      setCola((c) => [...c.filter((x) => x.id !== r.id), r]);
+      setDx(0);
+      setSaliendo(null);
+    }, 180);
+  }
+
   function onDeshacer() {
     const ultimo = historial[historial.length - 1];
     if (!ultimo || pending) return;
@@ -220,6 +234,51 @@ export function RitualDeck({
     else if (final < -UMBRAL_SWIPE) onArchivar();
     else setDx(0);
   }
+
+  // Teclado: 1–9 etiquetas, →/Enter clasificar, ← archivar, ↓ posponer, Z deshacer, / otra etiqueta.
+  // Se vuelve a registrar en cada render para que los manejadores vean el estado actual.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.repeat) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("input, textarea, select, [contenteditable='true']")) return;
+      const deshacerConModificador = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z";
+      if (!deshacerConModificador && (e.ctrlKey || e.metaKey || e.altKey)) return;
+      // Enter sobre un enlace con foco lo sigue. Sobre un botón (p. ej. la última etiqueta
+      // pulsada con el ratón) clasifica: preventDefault evita que además se vuelva a pulsar.
+      if (e.key === "Enter" && el?.closest("a")) return;
+
+      let hecho = true;
+      if (evento) {
+        if (e.key === "ArrowRight" || e.key === "Enter") revisarUnoAUno(evento);
+        else if (e.key === "ArrowLeft") archivarEvento(evento);
+        else hecho = false;
+      } else if (deshacerConModificador || e.key === "z" || e.key === "Z") {
+        onDeshacer();
+      } else if (!actual) {
+        hecho = false;
+      } else if (e.key === "ArrowRight" || e.key === "Enter") {
+        onClasificar();
+      } else if (e.key === "ArrowLeft") {
+        onArchivar();
+      } else if (e.key === "ArrowDown") {
+        onPosponer();
+      } else if (e.key === "/") {
+        etiquetaInputRef.current?.focus();
+      } else if (/^[1-9]$/.test(e.key)) {
+        const etiqueta = etiquetasRapidas(catalogo)[Number(e.key) - 1];
+        if (etiqueta && !pending) {
+          setError("");
+          setElegidas((s) => (s.some((x) => x.id === etiqueta.id) ? s.filter((x) => x.id !== etiqueta.id) : [...s, etiqueta]));
+        }
+      } else {
+        hecho = false;
+      }
+      if (hecho) e.preventDefault();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   const selectorPeriodo = (
     <div className="mb-4 flex rounded-lg border border-subtle bg-card p-1" role="tablist" aria-label="Periodo">
@@ -316,9 +375,12 @@ export function RitualDeck({
 
   const p = actual.persona;
   const rot = dx / 20;
-  const transform = saliendo
-    ? `translateX(${saliendo === "der" ? 120 : -120}%) rotate(${saliendo === "der" ? 12 : -12}deg)`
-    : `translateX(${dx}px) rotate(${rot}deg)`;
+  const transform =
+    saliendo === "abajo"
+      ? "translateY(24px) scale(0.96)"
+      : saliendo
+        ? `translateX(${saliendo === "der" ? 120 : -120}%) rotate(${saliendo === "der" ? 12 : -12}deg)`
+        : `translateX(${dx}px) rotate(${rot}deg)`;
 
   return (
     <>
@@ -338,8 +400,8 @@ export function RitualDeck({
 
         <article
           key={actual.id}
-          className={`${card} relative touch-pan-y select-none p-4 sm:p-6 ${dx === 0 || saliendo ? "transition-transform duration-200" : ""}`}
-          style={{ transform }}
+          className={`${card} relative touch-pan-y select-none p-4 sm:p-6 ${dx === 0 || saliendo ? "transition-[transform,opacity] duration-200" : ""}`}
+          style={{ transform, opacity: saliendo === "abajo" ? 0 : 1 }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -366,6 +428,8 @@ export function RitualDeck({
             <p className="mb-2 text-xs font-medium uppercase tracking-wider text-text-muted">¿Quién es?</p>
             <TagPicker
               quick
+              atajos
+              inputRef={etiquetaInputRef}
               selected={elegidas}
               all={catalogo}
               onAdd={(e) => setElegidas((s) => (s.some((x) => x.id === e.id) ? s : [...s, e]))}
@@ -397,7 +461,24 @@ export function RitualDeck({
           <Icon name="check" className="h-4 w-4" /> Clasificar
         </button>
       </div>
+      <button
+        type="button"
+        onClick={onPosponer}
+        disabled={pending || indice + 1 >= cola.length}
+        className={`${btn.ghost} mt-2 w-full`}
+        title={indice + 1 >= cola.length ? "Es el último contacto de la cola" : "Pasar al final de la cola"}
+      >
+        <Icon name="clock" className="h-4 w-4" /> Posponer
+      </button>
+      <p className="mt-3 hidden text-center text-xs text-text-muted [@media(hover:hover)]:block">
+        Teclado: <Kbd>1</Kbd>–<Kbd>9</Kbd> etiquetas · <Kbd>→</Kbd>/<Kbd>Enter</Kbd> clasificar · <Kbd>←</Kbd> archivar ·{" "}
+        <Kbd>↓</Kbd> posponer · <Kbd>Z</Kbd> deshacer · <Kbd>/</Kbd> otra etiqueta
+      </p>
       <p className="mt-3 text-center text-xs text-text-muted">1 punto por contacto clasificado · {porBono} puntos = bono</p>
     </>
   );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="rounded border border-subtle bg-card px-1 font-mono text-[11px] text-text-body">{children}</kbd>;
 }
