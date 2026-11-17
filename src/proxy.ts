@@ -8,12 +8,26 @@ import {
   verifySessionToken,
 } from "@/lib/auth/jwt";
 
+/** Páginas públicas de eventos: el invitado se identifica por el token de su enlace. */
+const RUTA_EVENTOS_PUBLICA = /^\/(e|baja|ics)\/[A-Za-z0-9_-]{43}$/;
+
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
+  const hostEventos = process.env.EVENTOS_HOST?.trim().toLowerCase();
+
+  // El dominio público de eventos (eventos.imparcapital.com) SOLO sirve las
+  // páginas de invitado: la app interna no es accesible desde él.
+  if (hostEventos && host === hostEventos) {
+    if (!RUTA_EVENTOS_PUBLICA.test(pathname)) return new NextResponse("No encontrado", { status: 404 });
+    return sinCookieDeSesion(request);
+  }
+  if (RUTA_EVENTOS_PUBLICA.test(pathname)) return NextResponse.next();
+
   const session = await verifySessionToken(
     request.cookies.get(SESSION_COOKIE_NAME)?.value ?? "",
   );
   const isAuthenticated = session !== null;
-  const pathname = request.nextUrl.pathname;
   const isLoginPage = pathname === "/login";
   // Las Server Actions son POST a la URL de la página con esta cabecera.
   const isServerAction = request.method === "POST" && request.headers.has("next-action");
